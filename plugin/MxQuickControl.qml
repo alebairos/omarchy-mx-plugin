@@ -85,20 +85,43 @@ Panel {
     else setLevel(keyboard.deviceIndex, level)
   }
 
+  // Setting Process.running = true while it is already running is a no-op
+  // (the running->running transition fires no start), so a request that
+  // arrives mid-command would otherwise be silently dropped -- exactly what
+  // a slider drag (many onMoved calls in a row) or a fast double-click
+  // produces. dispatchMode()/setLevel() queue the latest request instead
+  // and each Process's onExited replays it, so only the *final* desired
+  // state after a burst of input is ever lost, never an arbitrary one.
+  property var queuedModeAction: null   // { deviceIndex, mode, thenLevel }
+
   function setMode(deviceIndex, mode) {
-    modeProc.pendingLevel = -1
+    dispatchMode(deviceIndex, mode, -1)
+  }
+
+  function ensureManualThenSetLevel(deviceIndex, level) {
+    dispatchMode(deviceIndex, "Manual", level)
+  }
+
+  function dispatchMode(deviceIndex, mode, thenLevel) {
+    if (modeProc.running) {
+      queuedModeAction = { deviceIndex: deviceIndex, mode: mode, thenLevel: thenLevel }
+      return
+    }
+    modeProc.pendingLevel = thenLevel
+    modeProc.pendingDeviceIndex = deviceIndex
     modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", mode]
     modeProc.running = true
   }
 
-  function ensureManualThenSetLevel(deviceIndex, level) {
-    modeProc.pendingLevel = level
-    modeProc.pendingDeviceIndex = deviceIndex
-    modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", "Manual"]
-    modeProc.running = true
-  }
+  property int queuedLevelDeviceIndex: -1
+  property int queuedLevel: -1
 
   function setLevel(deviceIndex, level) {
+    if (levelProc.running) {
+      queuedLevelDeviceIndex = deviceIndex
+      queuedLevel = level
+      return
+    }
     levelProc.targetDeviceIndex = deviceIndex
     levelProc.targetLevel = level
     levelProc.command = ["solaar", "config", String(deviceIndex), "backlight_level", String(level)]
@@ -182,6 +205,12 @@ Panel {
     property int pendingLevel: -1
     property int pendingDeviceIndex: -1
     onExited: function(exitCode) {
+      if (root.queuedModeAction) {
+        var a = root.queuedModeAction
+        root.queuedModeAction = null
+        root.dispatchMode(a.deviceIndex, a.mode, a.thenLevel)
+        return
+      }
       if (pendingLevel >= 0) {
         var lvl = pendingLevel
         var idx = pendingDeviceIndex
@@ -209,6 +238,14 @@ Panel {
       }
     }
     onExited: function(exitCode) {
+      if (root.queuedLevel >= 0) {
+        var d = root.queuedLevelDeviceIndex
+        var l = root.queuedLevel
+        root.queuedLevelDeviceIndex = -1
+        root.queuedLevel = -1
+        root.setLevel(d, l)
+        return
+      }
       root.refresh()
     }
   }
