@@ -173,13 +173,29 @@ Panel {
   // toggle and level change. Only a failed write needs verification.
   function afterWrite(exitCode) {
     if (exitCode === 0 || !hasKeyboard) return
-    verifyProc.command = ["solaar", "config", String(keyboardIndex), "backlight"]
-    verifyProc.running = true
+    // Deferred for the same reason as drainQueued(): the Process that just
+    // failed still reads as running inside its own onExited.
+    Qt.callLater(function() {
+      if (root.solaarBusy) return
+      verifyProc.command = ["solaar", "config", String(root.keyboardIndex), "backlight"]
+      verifyProc.running = true
+    })
   }
 
   // Replay whatever was deferred while solaar was busy. Mode first: a queued
   // level usually belongs to the mode change that preceded it.
+  //
+  // Every caller is a Process's onExited, and `running` is still true at
+  // that point, so dispatching straight from here would hit the solaarBusy
+  // guard and re-queue the very item being drained -- with no one left to
+  // retry it, which is how a fast off-then-on lost its "on" write entirely
+  // and left the keyboard dark while the UI showed it lit. Defer until the
+  // running flag has actually settled, and keep deferring while busy.
   function drainQueued() {
+    if (solaarBusy) {
+      Qt.callLater(drainQueued)
+      return
+    }
     if (queuedModeAction) {
       var a = queuedModeAction
       queuedModeAction = null
@@ -299,12 +315,14 @@ Panel {
         // as a no-op. Write 0 first to make the saved value differ, then
         // chain the real target, which is then guaranteed to reach the
         // device. Only the rare mode-switch path pays for the extra write.
+        // Deferred: modeProc still reads as running inside its own
+        // onExited, so a direct call would re-queue instead of dispatching.
         if (lvl > 0) {
           levelProc.followupLevel = lvl
           levelProc.followupDeviceIndex = idx
-          root.setLevel(idx, 0)
+          Qt.callLater(function() { root.setLevel(idx, 0) })
         } else {
-          root.setLevel(idx, lvl)
+          Qt.callLater(function() { root.setLevel(idx, lvl) })
         }
         return
       }
@@ -343,7 +361,7 @@ Panel {
         var d = followupDeviceIndex
         followupLevel = -1
         followupDeviceIndex = -1
-        root.setLevel(d, l)
+        Qt.callLater(function() { root.setLevel(d, l) })
         return
       }
       if (root.queuedModeAction || root.queuedLevel >= 0) {
