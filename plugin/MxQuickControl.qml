@@ -456,10 +456,19 @@ Panel {
         onClicked: root.toggleBacklight()
       }
 
+      // The brightness row stays mounted whether the backlight is on or
+      // off, and only dims when off. Showing/hiding it moved everything
+      // below it the instant the toggle was clicked, so the slider could
+      // materialise directly under a pointer that was still over the
+      // toggle and immediately take the drag.
       Row {
-        visible: root.backlightOn
+        visible: root.hasKeyboard
+        enabled: root.backlightOn
+        opacity: root.backlightOn ? 1.0 : 0.35
         width: parent.width
         spacing: Style.space(10)
+
+        Behavior on opacity { NumberAnimation { duration: 120 } }
 
         Text {
           text: "💡"
@@ -472,18 +481,21 @@ Panel {
           bar: root.bar
           width: parent.width - 70
           anchors.verticalCenter: parent.verticalCenter
-          minimum: 0
+          // Starts at 1, not 0: level 0 *is* off, and that is the toggle's
+          // job. A slider that can reach 0 gives two controls for the same
+          // state and lets a drag silently switch the backlight off.
+          minimum: 1
           maximum: root.levelMaxByDevice[root.keyboardIndex] !== undefined
             ? root.levelMaxByDevice[root.keyboardIndex] : 7
           step: 1
           integer: true
-          value: root.backlightLevel
-          onMoved: function(v) { root.setBrightness(Math.round(v)) }
+          value: root.backlightLevel > 0 ? root.backlightLevel : root.lastOnLevel
+          onMoved: function(v) { root.setBrightness(Math.max(1, Math.round(v))) }
         }
 
         Text {
           textFormat: Text.PlainText
-          text: String(root.backlightLevel)
+          text: String(root.backlightLevel > 0 ? root.backlightLevel : root.lastOnLevel)
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           width: 24
