@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 // MX Quick Control - battery status + backlight control for Logitech MX
 // peripherals, driven entirely through the `solaar` CLI. Click the bar icon
@@ -222,58 +223,9 @@ Panel {
     levelProc.running = true
   }
 
+  // Parsing lives in Model.js so it can be unit-tested without a shell.
   function parseStatus(text) {
-    var lines = text.split("\n")
-    var result = []
-    var current = null
-    var inBacklight2 = false
-
-    for (var i = 0; i < lines.length; i++) {
-      var line = lines[i]
-
-      var deviceMatch = line.match(/^\s{2}(\d+):\s+(.+?)\s*$/)
-      if (deviceMatch) {
-        if (current) result.push(current)
-        current = {
-          name: deviceMatch[2],
-          deviceIndex: parseInt(deviceMatch[1], 10),
-          batteryPercent: null,
-          connected: true,
-          hasBacklight: false,
-          backlightMode: null,
-          backlightLevel: null
-        }
-        inBacklight2 = false
-        continue
-      }
-      if (!current) continue
-
-      var batteryMatch = line.match(/Battery:\s*(\d+)%/)
-      if (batteryMatch) current.batteryPercent = parseInt(batteryMatch[1], 10)
-
-      if (line.indexOf("BACKLIGHT2") !== -1) {
-        current.hasBacklight = true
-        inBacklight2 = true
-        continue
-      }
-      // A new numbered HID++ feature line ends the BACKLIGHT2 block.
-      if (inBacklight2 && /^\s{8}\d+:\s/.test(line) && line.indexOf("BACKLIGHT2") === -1) {
-        inBacklight2 = false
-      }
-      if (inBacklight2) {
-        // Every BACKLIGHT2 field is printed twice by `solaar show`: a
-        // "(saved)" line and the live value. The saved variant always has
-        // non-whitespace ("(saved)") between the label and the colon, so
-        // requiring whitespace right up to the colon here naturally skips
-        // it and only matches the live line.
-        var modeMatch = line.match(/Backlight\s+:\s*(\w+)/)
-        if (modeMatch) current.backlightMode = modeMatch[1]
-        var levelMatch = line.match(/Backlight Level\s+:\s*(\d+)/)
-        if (levelMatch) current.backlightLevel = parseInt(levelMatch[1], 10)
-      }
-    }
-    if (current) result.push(current)
-    return result
+    return Model.parseDevices(text)
   }
 
   Process {

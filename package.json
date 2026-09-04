@@ -1,0 +1,10 @@
+{
+  "name": "omarchy-mx-quick-control",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "description": "Tests for the MX Quick Control Omarchy plugin. The plugin itself is QML and ships without any node runtime dependency; node is used only to run the test suite.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "license": "MIT"
+}
