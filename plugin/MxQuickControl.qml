@@ -68,7 +68,7 @@ Panel {
   // `solaar show` was running), so a background refresh must never race a
   // user action. Writes take priority; a refresh that would collide is
   // dropped, since the next timer tick re-reads state anyway.
-  readonly property bool solaarBusy: statusProc.running || modeProc.running || levelProc.running
+  readonly property bool solaarBusy: statusProc.running || modeProc.running || levelProc.running || verifyProc.running
 
   function refresh() {
     if (solaarBusy) return
@@ -154,6 +154,16 @@ Panel {
 
   property int queuedLevelDeviceIndex: -1
   property int queuedLevel: -1
+
+  // Called when a write finishes and nothing is queued behind it. On success
+  // the optimistic state already matches the device, so we deliberately skip
+  // any read -- that is what removes ~10.5s of `solaar show` from every
+  // toggle and level change. Only a failed write needs verification.
+  function afterWrite(exitCode) {
+    if (exitCode === 0 || !hasKeyboard) return
+    verifyProc.command = ["solaar", "config", String(keyboardIndex), "backlight"]
+    verifyProc.running = true
+  }
 
   // Replay whatever was deferred while solaar was busy. Mode first: a queued
   // level usually belongs to the mode change that preceded it.
@@ -271,7 +281,6 @@ Panel {
       }
     }
     onExited: function(exitCode) {
-      console.log("mx-quick-control: modeProc exited code=" + exitCode)
       // The follow-up level write belongs to the mode change that just
       // landed, so it takes precedence over anything queued behind it.
       if (pendingLevel >= 0) {
@@ -286,7 +295,10 @@ Panel {
         root.drainQueued()
         return
       }
-      root.refresh()
+      // A successful write means the device now holds exactly what we
+      // optimistically published, so there is nothing to reconcile and no
+      // reason to pay for a full `solaar show` (see afterWrite()).
+      root.afterWrite(exitCode)
     }
   }
 
@@ -305,21 +317,39 @@ Panel {
       }
     }
     onExited: function(exitCode) {
-      console.log("mx-quick-control: levelProc exited code=" + exitCode + " level=" + targetLevel)
       if (root.queuedModeAction || root.queuedLevel >= 0) {
         root.drainQueued()
         return
       }
-      root.refresh()
+      root.afterWrite(exitCode)
     }
   }
 
+  // `solaar show` enumerates every device and costs ~10.5s on this hardware,
+  // against ~2.3s for a targeted `solaar config` read (measured). It is only
+  // needed to discover devices and read battery, neither of which changes
+  // quickly, so it runs on a slow timer instead of after every interaction.
   Timer {
-    interval: 60000
+    interval: 300000
     running: true
     repeat: true
     triggeredOnStart: true
     onTriggered: root.refresh()
+  }
+
+  // A write that failed left the device in an unknown state, so re-read the
+  // backlight fields -- targeted, not the full enumeration.
+  Process {
+    id: verifyProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var modeMatch = text.match(/backlight\s*=\s*(\w+)/)
+        if (modeMatch) root.backlightMode = modeMatch[1]
+        var levelMatch = text.match(/backlight_level\s*=\s*(\d+)/)
+        if (levelMatch) root.backlightLevel = parseInt(levelMatch[1], 10)
+      }
+    }
   }
 
   IpcHandler {
