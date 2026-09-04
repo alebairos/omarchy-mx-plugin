@@ -1,15 +1,24 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Commons
 import qs.Ui
 
-// MX Quick Control - battery status + one-click backlight control for
-// Logitech MX peripherals, driven entirely through the `solaar` CLI.
+// MX Quick Control - battery status + backlight control for Logitech MX
+// peripherals, driven entirely through the `solaar` CLI. Click the bar icon
+// to open a panel (same click-to-open, stays-open pattern as Omarchy's
+// built-in Network/Bluetooth/Power panels) with a backlight on/off switch,
+// a brightness slider, and battery status for every paired device.
 // See specs/001-mx-quick-control/ in the source repo for the full spec,
 // plan, and the exact `solaar` command contract this file implements.
-BarWidget {
+Panel {
   id: root
   moduleName: "alebairos.mx-quick-control"
+  ipcTarget: "alebairos.mx-quick-control"
+  // Owning the IpcHandler ourselves (see below) so we can add `refresh`
+  // alongside the open/close/show/hide/toggle the base Panel would
+  // otherwise register on our behalf.
+  manageIpc: false
 
   // One entry per device solaar reports this refresh:
   // { name, deviceIndex, batteryPercent (or null), connected, hasBacklight,
@@ -22,11 +31,24 @@ BarWidget {
   // contracts/solaar-cli.md, "levelMax detection".
   property var levelMaxByDevice: ({})
 
+  // A reasonable default brightness when turning the backlight on from
+  // fully off (level 0) — otherwise "on" can land at level 0, which looks
+  // identical to off.
+  readonly property int defaultOnLevel: 4
+
   readonly property var keyboard: {
     for (var i = 0; i < devices.length; i++) {
       if (devices[i].hasBacklight) return devices[i]
     }
     return null
+  }
+
+  readonly property var otherDevices: {
+    var list = []
+    for (var i = 0; i < devices.length; i++) {
+      if (!devices[i].hasBacklight) list.push(devices[i])
+    }
+    return list
   }
 
   visible: solaarAvailable && devices.length > 0
@@ -40,25 +62,46 @@ BarWidget {
   function toggleBacklight() {
     if (!keyboard) return
     var turningOn = keyboard.backlightMode !== "Manual"
-    var newMode = turningOn ? "Manual" : "Disabled"
-    // Optimistic update; reconciled by the next refresh() (spec US2, task T012).
-    keyboard.backlightMode = newMode
-    devices = devices.slice()
-    toggleProc.command = ["solaar", "config", String(keyboard.deviceIndex), "backlight", newMode]
-    toggleProc.running = true
+    if (turningOn) {
+      var level = (keyboard.backlightLevel && keyboard.backlightLevel > 0) ? keyboard.backlightLevel : defaultOnLevel
+      keyboard.backlightMode = "Manual"
+      keyboard.backlightLevel = level
+      devices = devices.slice()
+      ensureManualThenSetLevel(keyboard.deviceIndex, level)
+    } else {
+      keyboard.backlightMode = "Disabled"
+      devices = devices.slice()
+      setMode(keyboard.deviceIndex, "Disabled")
+    }
   }
 
-  function stepBacklight(delta) {
-    if (!keyboard || keyboard.backlightMode !== "Manual") return
-    var max = levelMaxByDevice[keyboard.deviceIndex]
-    var current = keyboard.backlightLevel !== null ? keyboard.backlightLevel : 0
-    var next = current + (delta > 0 ? 1 : -1)
-    next = Math.max(0, next)
-    if (max !== undefined) next = Math.min(next, max)
-    if (next === current) return
-    levelProc.targetDeviceIndex = keyboard.deviceIndex
-    levelProc.targetLevel = next
-    levelProc.command = ["solaar", "config", String(keyboard.deviceIndex), "backlight_level", String(next)]
+  function setBrightness(level) {
+    if (!keyboard) return
+    var needsModeSwitch = keyboard.backlightMode !== "Manual"
+    keyboard.backlightLevel = level
+    if (needsModeSwitch) keyboard.backlightMode = "Manual"
+    devices = devices.slice()
+    if (needsModeSwitch) ensureManualThenSetLevel(keyboard.deviceIndex, level)
+    else setLevel(keyboard.deviceIndex, level)
+  }
+
+  function setMode(deviceIndex, mode) {
+    modeProc.pendingLevel = -1
+    modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", mode]
+    modeProc.running = true
+  }
+
+  function ensureManualThenSetLevel(deviceIndex, level) {
+    modeProc.pendingLevel = level
+    modeProc.pendingDeviceIndex = deviceIndex
+    modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", "Manual"]
+    modeProc.running = true
+  }
+
+  function setLevel(deviceIndex, level) {
+    levelProc.targetDeviceIndex = deviceIndex
+    levelProc.targetLevel = level
+    levelProc.command = ["solaar", "config", String(deviceIndex), "backlight_level", String(level)]
     levelProc.running = true
   }
 
@@ -101,6 +144,11 @@ BarWidget {
         inBacklight2 = false
       }
       if (inBacklight2) {
+        // Every BACKLIGHT2 field is printed twice by `solaar show`: a
+        // "(saved)" line and the live value. The saved variant always has
+        // non-whitespace ("(saved)") between the label and the colon, so
+        // requiring whitespace right up to the colon here naturally skips
+        // it and only matches the live line.
         var modeMatch = line.match(/Backlight\s+:\s*(\w+)/)
         if (modeMatch) current.backlightMode = modeMatch[1]
         var levelMatch = line.match(/Backlight Level\s+:\s*(\d+)/)
@@ -130,11 +178,19 @@ BarWidget {
   }
 
   Process {
-    id: toggleProc
+    id: modeProc
+    property int pendingLevel: -1
+    property int pendingDeviceIndex: -1
     onExited: function(exitCode) {
-      // Non-zero here means the optimistic update in toggleBacklight() was
-      // wrong; the next refresh() will correct the displayed state either way.
-      root.refresh()
+      if (pendingLevel >= 0) {
+        var lvl = pendingLevel
+        var idx = pendingDeviceIndex
+        pendingLevel = -1
+        pendingDeviceIndex = -1
+        root.setLevel(idx, lvl)
+      } else {
+        root.refresh()
+      }
     }
   }
 
@@ -166,10 +222,13 @@ BarWidget {
   }
 
   IpcHandler {
-    target: "alebairos.mx-quick-control"
-    function refresh(): void {
-      root.refresh()
-    }
+    target: root.ipcTarget
+    function open(): void { root.open() }
+    function close(): void { root.close() }
+    function show(): void { root.open() }
+    function hide(): void { root.close() }
+    function toggle(): void { root.toggle() }
+    function refresh(): void { root.refresh() }
   }
 
   BarIconButton {
@@ -178,24 +237,105 @@ BarWidget {
     bar: root.bar
     text: (root.keyboard && root.keyboard.backlightMode === "Manual") ? "💡" : "⌨"
     active: root.keyboard && root.keyboard.backlightMode === "Manual"
-    tooltipText: {
-      if (root.devices.length === 0) return "No Logitech devices detected"
-      var parts = []
-      for (var i = 0; i < root.devices.length; i++) {
-        var d = root.devices[i]
-        var line = d.name + ": " + (d.batteryPercent !== null ? d.batteryPercent + "%" : "battery n/a")
-        if (d.hasBacklight) {
-          line += " · backlight " + (d.backlightMode === "Manual" ? ("on, level " + d.backlightLevel) : "off")
-        }
-        parts.push(line)
-      }
-      return parts.join("\n")
-    }
+    tooltipText: "MX Quick Control"
     onPressed: function(b) {
-      root.toggleBacklight()
+      root.toggle()
     }
-    onWheelMoved: function(delta) {
-      root.stepBacklight(delta)
+  }
+
+  KeyboardPanel {
+    id: panel
+    anchorItem: button
+    owner: root
+    bar: root.bar
+    open: root.opened
+    contentWidth: panel.fittedContentWidth(Style.space(300))
+    contentHeight: panel.fittedContentHeight(column.implicitHeight)
+
+    Column {
+      id: column
+      anchors.left: parent.left
+      anchors.right: parent.right
+      anchors.top: parent.top
+      spacing: Style.space(12)
+
+      PanelSectionHeader {
+        text: root.keyboard ? root.keyboard.name : "MX Quick Control"
+        foreground: root.bar.foreground
+      }
+
+      Text {
+        visible: !root.keyboard
+        width: parent.width
+        textFormat: Text.PlainText
+        text: root.devices.length === 0 ? "No Logitech devices detected" : "No backlight-capable device paired"
+        color: root.bar.foreground
+        font.family: root.bar.fontFamily
+        wrapMode: Text.WordWrap
+      }
+
+      Toggle {
+        visible: !!root.keyboard
+        width: parent.width
+        label: "Backlight"
+        description: root.keyboard && root.keyboard.batteryPercent !== null
+          ? "Battery " + root.keyboard.batteryPercent + "%" : ""
+        checked: !!(root.keyboard && root.keyboard.backlightMode === "Manual")
+        foreground: root.bar.foreground
+        onClicked: root.toggleBacklight()
+      }
+
+      Row {
+        visible: !!(root.keyboard && root.keyboard.backlightMode === "Manual")
+        width: parent.width
+        spacing: Style.space(10)
+
+        Text {
+          text: "💡"
+          font.pixelSize: Style.font.heading
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        PanelSlider {
+          id: brightnessSlider
+          bar: root.bar
+          width: parent.width - 70
+          anchors.verticalCenter: parent.verticalCenter
+          minimum: 0
+          maximum: root.keyboard && root.levelMaxByDevice[root.keyboard.deviceIndex] !== undefined
+            ? root.levelMaxByDevice[root.keyboard.deviceIndex] : 7
+          step: 1
+          integer: true
+          value: root.keyboard && root.keyboard.backlightLevel !== null ? root.keyboard.backlightLevel : 0
+          onMoved: function(v) { root.setBrightness(Math.round(v)) }
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          text: String(root.keyboard && root.keyboard.backlightLevel !== null ? root.keyboard.backlightLevel : 0)
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          width: 24
+          horizontalAlignment: Text.AlignRight
+          anchors.verticalCenter: parent.verticalCenter
+        }
+      }
+
+      PanelSeparator {
+        visible: root.otherDevices.length > 0
+        foreground: root.bar.foreground
+      }
+
+      Repeater {
+        model: root.otherDevices
+        delegate: Text {
+          width: column.width
+          textFormat: Text.PlainText
+          text: modelData.name + ": " + (modelData.batteryPercent !== null ? modelData.batteryPercent + "%" : "battery n/a")
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+        }
+      }
     }
   }
 }
