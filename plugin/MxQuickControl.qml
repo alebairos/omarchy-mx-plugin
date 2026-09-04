@@ -36,12 +36,19 @@ Panel {
   // identical to off.
   readonly property int defaultOnLevel: 4
 
-  readonly property var keyboard: {
-    for (var i = 0; i < devices.length; i++) {
-      if (devices[i].hasBacklight) return devices[i]
-    }
-    return null
-  }
+  // Keyboard state lives in plain observable properties rather than being
+  // read through `devices`. QML cannot observe field mutations on plain JS
+  // objects, and a computed `keyboard` binding hands back the *same* object
+  // reference after a refresh, so no change signal fires and every control
+  // bound to it goes stale -- which is exactly what made the toggle snap
+  // back and kept the brightness slider from ever appearing.
+  property int keyboardIndex: -1
+  property string keyboardName: ""
+  property string backlightMode: ""
+  property int backlightLevel: 0
+  property int keyboardBattery: -1
+  readonly property bool hasKeyboard: keyboardIndex >= 0
+  readonly property bool backlightOn: backlightMode === "Manual"
 
   readonly property var otherDevices: {
     var list = []
@@ -55,34 +62,62 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
+  // Only one `solaar` invocation may be in flight at a time. Concurrent
+  // calls contend for the same receiver and one of them fails (observed:
+  // `solaar config ... backlight Manual` exiting 1 while a background
+  // `solaar show` was running), so a background refresh must never race a
+  // user action. Writes take priority; a refresh that would collide is
+  // dropped, since the next timer tick re-reads state anyway.
+  readonly property bool solaarBusy: statusProc.running || modeProc.running || levelProc.running
+
   function refresh() {
-    if (!statusProc.running) statusProc.running = true
+    if (solaarBusy) return
+    statusProc.running = true
+  }
+
+  // Copy the freshly parsed keyboard row into the observable properties the
+  // UI binds to. Anything not backlight-capable stays in `devices` and is
+  // rendered straight from there (read-only, so plain objects are fine).
+  function publishKeyboardState() {
+    for (var i = 0; i < devices.length; i++) {
+      var d = devices[i]
+      if (!d.hasBacklight) continue
+      keyboardIndex = d.deviceIndex
+      keyboardName = d.name
+      backlightMode = d.backlightMode !== null ? d.backlightMode : ""
+      backlightLevel = d.backlightLevel !== null ? d.backlightLevel : 0
+      keyboardBattery = d.batteryPercent !== null ? d.batteryPercent : -1
+      return
+    }
+    keyboardIndex = -1
+    keyboardName = ""
+    backlightMode = ""
+    backlightLevel = 0
+    keyboardBattery = -1
   }
 
   function toggleBacklight() {
-    if (!keyboard) return
-    var turningOn = keyboard.backlightMode !== "Manual"
-    if (turningOn) {
-      var level = (keyboard.backlightLevel && keyboard.backlightLevel > 0) ? keyboard.backlightLevel : defaultOnLevel
-      keyboard.backlightMode = "Manual"
-      keyboard.backlightLevel = level
-      devices = devices.slice()
-      ensureManualThenSetLevel(keyboard.deviceIndex, level)
+    if (!hasKeyboard) return
+    if (!backlightOn) {
+      var level = backlightLevel > 0 ? backlightLevel : defaultOnLevel
+      // Optimistic: these are real properties, so the UI updates instantly
+      // and the next refresh() reconciles against the device.
+      backlightMode = "Manual"
+      backlightLevel = level
+      ensureManualThenSetLevel(keyboardIndex, level)
     } else {
-      keyboard.backlightMode = "Disabled"
-      devices = devices.slice()
-      setMode(keyboard.deviceIndex, "Disabled")
+      backlightMode = "Disabled"
+      setMode(keyboardIndex, "Disabled")
     }
   }
 
   function setBrightness(level) {
-    if (!keyboard) return
-    var needsModeSwitch = keyboard.backlightMode !== "Manual"
-    keyboard.backlightLevel = level
-    if (needsModeSwitch) keyboard.backlightMode = "Manual"
-    devices = devices.slice()
-    if (needsModeSwitch) ensureManualThenSetLevel(keyboard.deviceIndex, level)
-    else setLevel(keyboard.deviceIndex, level)
+    if (!hasKeyboard) return
+    var needsModeSwitch = !backlightOn
+    backlightLevel = level
+    if (needsModeSwitch) backlightMode = "Manual"
+    if (needsModeSwitch) ensureManualThenSetLevel(keyboardIndex, level)
+    else setLevel(keyboardIndex, level)
   }
 
   // Setting Process.running = true while it is already running is a no-op
@@ -103,21 +138,43 @@ Panel {
   }
 
   function dispatchMode(deviceIndex, mode, thenLevel) {
-    if (modeProc.running) {
+    // Queue behind ANY in-flight solaar call, not just another mode write:
+    // a concurrent `solaar show` refresh will make this one fail with exit 1.
+    if (solaarBusy) {
+      console.log("mx-quick-control: dispatchMode queued (busy): device=" + deviceIndex + " mode=" + mode + " thenLevel=" + thenLevel)
       queuedModeAction = { deviceIndex: deviceIndex, mode: mode, thenLevel: thenLevel }
       return
     }
     modeProc.pendingLevel = thenLevel
     modeProc.pendingDeviceIndex = deviceIndex
     modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", mode]
+    console.log("mx-quick-control: running: " + modeProc.command.join(" "))
     modeProc.running = true
   }
 
   property int queuedLevelDeviceIndex: -1
   property int queuedLevel: -1
 
+  // Replay whatever was deferred while solaar was busy. Mode first: a queued
+  // level usually belongs to the mode change that preceded it.
+  function drainQueued() {
+    if (queuedModeAction) {
+      var a = queuedModeAction
+      queuedModeAction = null
+      dispatchMode(a.deviceIndex, a.mode, a.thenLevel)
+      return
+    }
+    if (queuedLevel >= 0) {
+      var d = queuedLevelDeviceIndex
+      var l = queuedLevel
+      queuedLevelDeviceIndex = -1
+      queuedLevel = -1
+      setLevel(d, l)
+    }
+  }
+
   function setLevel(deviceIndex, level) {
-    if (levelProc.running) {
+    if (solaarBusy) {
       queuedLevelDeviceIndex = deviceIndex
       queuedLevel = level
       return
@@ -190,6 +247,7 @@ Panel {
       onStreamFinished: {
         root.solaarAvailable = true
         root.devices = root.parseStatus(text)
+        root.publishKeyboardState()
       }
     }
     onExited: function(exitCode) {
@@ -197,6 +255,8 @@ Panel {
         root.solaarAvailable = false
         root.devices = []
       }
+      // A write that arrived while this read was in flight is waiting.
+      root.drainQueued()
     }
   }
 
@@ -204,22 +264,29 @@ Panel {
     id: modeProc
     property int pendingLevel: -1
     property int pendingDeviceIndex: -1
-    onExited: function(exitCode) {
-      if (root.queuedModeAction) {
-        var a = root.queuedModeAction
-        root.queuedModeAction = null
-        root.dispatchMode(a.deviceIndex, a.mode, a.thenLevel)
-        return
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        if (text.trim() !== "") console.log("mx-quick-control: modeProc stderr: " + text.trim())
       }
+    }
+    onExited: function(exitCode) {
+      console.log("mx-quick-control: modeProc exited code=" + exitCode)
+      // The follow-up level write belongs to the mode change that just
+      // landed, so it takes precedence over anything queued behind it.
       if (pendingLevel >= 0) {
         var lvl = pendingLevel
         var idx = pendingDeviceIndex
         pendingLevel = -1
         pendingDeviceIndex = -1
         root.setLevel(idx, lvl)
-      } else {
-        root.refresh()
+        return
       }
+      if (root.queuedModeAction || root.queuedLevel >= 0) {
+        root.drainQueued()
+        return
+      }
+      root.refresh()
     }
   }
 
@@ -238,12 +305,9 @@ Panel {
       }
     }
     onExited: function(exitCode) {
-      if (root.queuedLevel >= 0) {
-        var d = root.queuedLevelDeviceIndex
-        var l = root.queuedLevel
-        root.queuedLevelDeviceIndex = -1
-        root.queuedLevel = -1
-        root.setLevel(d, l)
+      console.log("mx-quick-control: levelProc exited code=" + exitCode + " level=" + targetLevel)
+      if (root.queuedModeAction || root.queuedLevel >= 0) {
+        root.drainQueued()
         return
       }
       root.refresh()
@@ -266,14 +330,26 @@ Panel {
     function hide(): void { root.close() }
     function toggle(): void { root.toggle() }
     function refresh(): void { root.refresh() }
+
+    // Same entry points the panel's controls use, exposed so the widget can
+    // be driven and verified without a pointer -- `qs ipc call
+    // alebairos.mx-quick-control backlight` etc.
+    function backlight(): void { root.toggleBacklight() }
+    function level(value: string): void { root.setBrightness(parseInt(value, 10)) }
+    function status(): string {
+      if (!root.hasKeyboard) return "no backlight-capable device (devices=" + root.devices.length + ")"
+      return root.keyboardName + " mode=" + root.backlightMode
+        + " level=" + root.backlightLevel
+        + " busy=" + root.solaarBusy
+    }
   }
 
   BarIconButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: (root.keyboard && root.keyboard.backlightMode === "Manual") ? "💡" : "⌨"
-    active: root.keyboard && root.keyboard.backlightMode === "Manual"
+    text: root.backlightOn ? "💡" : "⌨"
+    active: root.backlightOn
     tooltipText: "MX Quick Control"
     onPressed: function(b) {
       root.toggle()
@@ -297,12 +373,12 @@ Panel {
       spacing: Style.space(12)
 
       PanelSectionHeader {
-        text: root.keyboard ? root.keyboard.name : "MX Quick Control"
+        text: root.hasKeyboard ? root.keyboardName : "MX Quick Control"
         foreground: root.bar.foreground
       }
 
       Text {
-        visible: !root.keyboard
+        visible: !root.hasKeyboard
         width: parent.width
         textFormat: Text.PlainText
         text: root.devices.length === 0 ? "No Logitech devices detected" : "No backlight-capable device paired"
@@ -312,18 +388,17 @@ Panel {
       }
 
       Toggle {
-        visible: !!root.keyboard
+        visible: root.hasKeyboard
         width: parent.width
         label: "Backlight"
-        description: root.keyboard && root.keyboard.batteryPercent !== null
-          ? "Battery " + root.keyboard.batteryPercent + "%" : ""
-        checked: !!(root.keyboard && root.keyboard.backlightMode === "Manual")
+        description: root.keyboardBattery >= 0 ? "Battery " + root.keyboardBattery + "%" : ""
+        checked: root.backlightOn
         foreground: root.bar.foreground
         onClicked: root.toggleBacklight()
       }
 
       Row {
-        visible: !!(root.keyboard && root.keyboard.backlightMode === "Manual")
+        visible: root.backlightOn
         width: parent.width
         spacing: Style.space(10)
 
@@ -339,17 +414,17 @@ Panel {
           width: parent.width - 70
           anchors.verticalCenter: parent.verticalCenter
           minimum: 0
-          maximum: root.keyboard && root.levelMaxByDevice[root.keyboard.deviceIndex] !== undefined
-            ? root.levelMaxByDevice[root.keyboard.deviceIndex] : 7
+          maximum: root.levelMaxByDevice[root.keyboardIndex] !== undefined
+            ? root.levelMaxByDevice[root.keyboardIndex] : 7
           step: 1
           integer: true
-          value: root.keyboard && root.keyboard.backlightLevel !== null ? root.keyboard.backlightLevel : 0
+          value: root.backlightLevel
           onMoved: function(v) { root.setBrightness(Math.round(v)) }
         }
 
         Text {
           textFormat: Text.PlainText
-          text: String(root.keyboard && root.keyboard.backlightLevel !== null ? root.keyboard.backlightLevel : 0)
+          text: String(root.backlightLevel)
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           width: 24
