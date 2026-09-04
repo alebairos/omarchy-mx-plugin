@@ -112,17 +112,47 @@ and mouse `dpi`.
 
 ---
 
-## Open decisions
+## Decisions (settled 2026-09-04)
 
-1. **Plugin id namespace.** `alebairos.mx-quick-control` is valid and
-   collision-free, but the `<username>.` form is specifically the *clone*
-   convention (`omarchy-plugin-clone` builds `${USER}.${id}` so a shared
-   clone does not collide). For a published plugin the namespace should be
-   a deliberate public identity. Keep as-is, or choose another before it is
-   public and expensive to change?
-2. **Test depth for RC.** Phase D in full (unit + integration), or
-   unit-only to ship sooner with integration following? Integration is the
-   phase that covers the class of bug that actually bit us.
+### 1. Plugin id namespace: keep `alebairos.mx-quick-control`
+
+**Decided: keep the publisher handle. Do not bind the namespace to Solaar.**
+
+The namespace slot carries *publisher identity*, not the dependency. That is
+exactly how Omarchy uses it: `omarchy.*` is reserved for first-party and
+validation rejects it outright, and `omarchy-plugin-clone` stamps
+`${USER}.` precisely so the id "stays yours".
+
+An id such as `solaar.mx-quick-control` would therefore claim an identity
+belonging to the pwr-Solaar project — implying an official plugin they
+neither wrote nor endorsed. That is a misrepresentation, and in a community
+that cares about provenance it is a reason to reject a plugin on sight.
+It also ages badly: the namespace should not be hostage to a backend
+choice, and a publisher namespace lets further plugins ship under it
+without collision.
+
+Solaar is surfaced where it genuinely helps discovery and gives credit —
+the manifest `description`, the README's requirements section, and the
+middle-click-to-open action (T011). Attribution, not appropriation.
+
+**Consequence**: no rename, no work. Ids stay as they are.
+
+### 2. Test depth: full Phase D, including the integration test
+
+**Decided: T017-T021 in full, not unit-only.**
+
+The genuine open-source acceptance minimum is narrower than this: pure
+logic under unit test, plus CI running green on push (T017-T019, T021). A
+reviewer wants to see that tests exist, run automatically, and exercise the
+logic rather than the framework.
+
+Phase D is nonetheless taken in full because this project's own defect
+history argues for it. The dropped-write bug, the no-op write elided by
+solaar, and the mode-switch level reset were all invisible to unit tests of
+pure functions — they lived in *which commands were issued, and in what
+order*. An RC whose suite passes on all three of the defects a human
+actually found would be theatre. T020's fake `solaar` is a short shell
+script on `PATH`, so the marginal cost is small against what it covers.
 
 ---
 
