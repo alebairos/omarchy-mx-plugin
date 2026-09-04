@@ -40,7 +40,7 @@ implemented until device status can be read and the widget can hide itself safel
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T004 Define `plugin/manifest.json`: `"kinds": ["bar-widget"]`, `entryPoints.barWidget`, `id: "omarchy.mx-quick-control"`, per contracts/ipc-contract.md and plan.md Project Structure
+- [ ] T004 Define `plugin/manifest.json`: `"kinds": ["bar-widget"]`, `entryPoints.barWidget`, `id: "alebairos.mx-quick-control"`, per contracts/ipc-contract.md and plan.md Project Structure
 - [ ] T005 Implement `solaar show` `Process` call and defensive per-line parsing into a Paired Device list (`name`, `deviceIndex`, `batteryPercent`, `connected`, `hasBacklight`) in `plugin/MxQuickControl.qml`, per data-model.md and contracts/solaar-cli.md
 - [ ] T006 Implement the refresh `Timer` (60s interval, `triggeredOnStart: true`) driving T005, and the `visible` binding that hides the widget when `solaar` is missing or no device is connected (constitution Principle IV, spec FR-005) in `plugin/MxQuickControl.qml`
 - [ ] T007 [P] Implement the `IpcHandler` `refresh` function per contracts/ipc-contract.md in `plugin/MxQuickControl.qml`

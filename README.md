@@ -35,7 +35,7 @@ plan, and task breakdown live in [`specs/001-mx-quick-control/`](specs/001-mx-qu
 git clone https://github.com/alebairos/omarchy-mx-plugin.git
 cp -r omarchy-mx-plugin/plugin ~/.config/omarchy/plugins/mx-quick-control
 omarchy-shell shell rescanPlugins
-omarchy bar move omarchy.mx-quick-control --section right
+omarchy bar put alebairos.mx-quick-control --section right
 ```
 
 ## How it works

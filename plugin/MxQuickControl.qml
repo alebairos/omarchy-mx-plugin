@@ -9,7 +9,7 @@ import qs.Ui
 // plan, and the exact `solaar` command contract this file implements.
 BarWidget {
   id: root
-  moduleName: "omarchy.mx-quick-control"
+  moduleName: "alebairos.mx-quick-control"
 
   // One entry per device solaar reports this refresh:
   // { name, deviceIndex, batteryPercent (or null), connected, hasBacklight,
@@ -166,7 +166,7 @@ BarWidget {
   }
 
   IpcHandler {
-    target: "omarchy.mx-quick-control"
+    target: "alebairos.mx-quick-control"
     function refresh(): void {
       root.refresh()
     }

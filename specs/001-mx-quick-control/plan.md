@@ -6,7 +6,7 @@
 
 ## Summary
 
-A single Omarchy bar widget (`omarchy.mx-quick-control`) that shows paired
+A single Omarchy bar widget (`alebairos.mx-quick-control`) that shows paired
 Logitech device battery status and lets the user toggle/step keyboard
 backlight, all by shelling out to the already-installed `solaar` CLI. No new
 daemon, no direct HID++ handling — the widget is a thin, periodically

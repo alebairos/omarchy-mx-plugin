@@ -8,7 +8,7 @@ the user changes something in Solaar directly).
 
 ```qml
 IpcHandler {
-  target: "omarchy.mx-quick-control"
+  target: "alebairos.mx-quick-control"
   function refresh(): void { root.broadcast("refresh") }
 }
 ```
@@ -17,7 +17,7 @@ Callable from a terminal as (exact invocation follows Quickshell's IPC
 conventions, same as other Omarchy widgets):
 
 ```
-qs ipc call omarchy.mx-quick-control refresh
+qs ipc call alebairos.mx-quick-control refresh
 ```
 
 No other IPC surface is exposed in v1 — click/scroll interaction is handled

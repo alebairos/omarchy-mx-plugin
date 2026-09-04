@@ -23,7 +23,7 @@ omarchy-shell shell rescanPlugins
 Then add it to the bar (adjust section to taste):
 
 ```bash
-omarchy bar move omarchy.mx-quick-control --section right
+omarchy bar put alebairos.mx-quick-control --section right
 ```
 
 ## Validate User Story 1 — battery at a glance
@@ -60,4 +60,4 @@ omarchy bar move omarchy.mx-quick-control --section right
    the rest of the bar keeps working normally, no error dialog, no freeze.
 3. Restore `solaar`/the receiver. **Expected**: widget reappears within one
    refresh interval (default 60s) or after a manual
-   `qs ipc call omarchy.mx-quick-control refresh`.
+   `qs ipc call alebairos.mx-quick-control refresh`.
