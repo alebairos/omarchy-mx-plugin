@@ -424,11 +424,60 @@ Panel {
     id: button
     anchors.fill: parent
     bar: root.bar
-    text: root.backlightOn ? "💡" : "⌨"
+    // Nerd Font (Material Design Icons) keyboard glyphs, matching the rest
+    // of the bar. Emoji render in a different font at a different weight
+    // and ignore the theme colour, which is three separate ways of looking
+    // foreign next to a first-party widget. Both codepoints verified
+    // present in JetBrainsMono Nerd Font via `fc-list :charset=...`.
+    text: root.backlightOn ? "󰌌" : "󰌐"   // mdi-keyboard / mdi-keyboard-off
     active: root.backlightOn
-    tooltipText: "MX Quick Control"
+    tooltipText: {
+      if (!root.solaarAvailable) return "Solaar not installed"
+      if (!root.hasKeyboard) return "No Logitech keyboard detected"
+      return root.keyboardName + (root.keyboardBattery >= 0 ? " · " + root.keyboardBattery + "%" : "")
+        + " · backlight " + (root.backlightOn ? root.backlightLevel : "off")
+    }
     onPressed: function(b) {
-      root.toggle()
+      // Middle-click opens Solaar itself, the escape hatch to every
+      // setting this widget deliberately does not expose. Mirrors the
+      // built-in Microphone widget, which middle-clicks into the audio panel.
+      if (b === Qt.MiddleButton) root.bar.run("solaar")
+      else root.toggle()
+    }
+  }
+
+  // Keyboard navigation, matching every first-party panel. `cursorActive`
+  // stays false until the first arrow press so opening the panel with the
+  // mouse does not paint a cursor nobody asked for -- same convention the
+  // built-in Power and Dropbox panels use.
+  property bool cursorActive: false
+  property int cursorIndex: 0
+  // Rows the cursor can visit: 0 = backlight toggle, 1 = brightness slider
+  // (only reachable while the backlight is on, since it is disabled when off).
+  readonly property int cursorRowCount: backlightOn ? 2 : 1
+
+  function moveCursor(dx, dy) {
+    var delta = dy !== 0 ? dy : dx
+    cursorIndex = Math.max(0, Math.min(cursorRowCount - 1, cursorIndex + delta))
+  }
+
+  function activateCursor() {
+    if (cursorIndex === 0) toggleBacklight()
+  }
+
+  // Left/right on the slider row nudges brightness; on the toggle row the
+  // horizontal keys just move the cursor like anywhere else.
+  function adjustCursor(dx) {
+    if (cursorIndex !== 1 || !backlightOn) return false
+    var max = levelMaxByDevice[keyboardIndex] !== undefined ? levelMaxByDevice[keyboardIndex] : 7
+    setBrightness(Math.max(1, Math.min(max, backlightLevel + dx)))
+    return true
+  }
+
+  onOpenedChanged: {
+    if (opened) {
+      cursorActive = false
+      cursorIndex = 0
     }
   }
 
@@ -438,8 +487,21 @@ Panel {
     owner: root
     bar: root.bar
     open: root.opened
+    focusTarget: keyCatcher
     contentWidth: panel.fittedContentWidth(Style.space(300))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
+
+    PanelKeyCatcher {
+      id: keyCatcher
+      anchors.fill: parent
+      onMoveRequested: function(dx, dy) {
+        if (!root.cursorActive) { root.cursorActive = true; return }
+        if (dx !== 0 && root.adjustCursor(dx)) return
+        root.moveCursor(dx, dy)
+      }
+      onActivateRequested: if (root.cursorActive) root.activateCursor()
+      onCloseRequested: root.close()
+      onTabRequested: function(direction) { root.switchPanel(direction) }
 
     Column {
       id: column
@@ -470,7 +532,9 @@ Panel {
         description: root.keyboardBattery >= 0 ? "Battery " + root.keyboardBattery + "%" : ""
         checked: root.backlightOn
         foreground: root.bar.foreground
+        hasCursor: root.cursorActive && root.cursorIndex === 0
         onClicked: root.toggleBacklight()
+        onHovered: function(h) { if (h) { root.cursorActive = true; root.cursorIndex = 0 } }
       }
 
       // The brightness row stays mounted whether the backlight is on or
@@ -488,7 +552,10 @@ Panel {
         Behavior on opacity { NumberAnimation { duration: 120 } }
 
         Text {
-          text: "💡"
+          // mdi-brightness-7, verified present in JetBrainsMono Nerd Font.
+          text: "󰃠"
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
           font.pixelSize: Style.font.heading
           anchors.verticalCenter: parent.verticalCenter
         }
@@ -508,6 +575,7 @@ Panel {
           integer: true
           value: root.backlightLevel > 0 ? root.backlightLevel : root.lastOnLevel
           onMoved: function(v) { root.setBrightness(Math.max(1, Math.round(v))) }
+          onDraggingChanged: if (dragging) { root.cursorActive = true; root.cursorIndex = 1 }
         }
 
         Text {
@@ -536,6 +604,7 @@ Panel {
           font.family: root.bar.fontFamily
         }
       }
+    }
     }
   }
 }
