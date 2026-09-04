@@ -1,0 +1,8 @@
+# Claude Code local/session state — never committed even though .claude/skills/ (prompts only) is tracked
+.claude/settings.local.json
+.claude/*.local.json
+.claude/.credentials.json
+
+# OS/editor cruft
+.DS_Store
+*.swp

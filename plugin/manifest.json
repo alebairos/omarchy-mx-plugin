@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "omarchy.mx-quick-control",
+  "name": "MX Quick Control",
+  "version": "1.0.0",
+  "author": "Alexandre Bairos",
+  "description": "Battery status and one-click backlight control for Logitech MX peripherals, via solaar",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "MxQuickControl.qml"
+  },
+  "barWidget": {
+    "displayName": "MX Quick Control",
+    "description": "Battery + backlight status for paired Logitech MX devices",
+    "category": "System",
+    "allowMultiple": false
+  }
+}
