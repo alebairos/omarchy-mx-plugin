@@ -154,7 +154,6 @@ Panel {
     // Queue behind ANY in-flight solaar call, not just another mode write:
     // a concurrent `solaar show` refresh will make this one fail with exit 1.
     if (solaarBusy) {
-      console.log("mx-quick-control: dispatchMode queued (busy): device=" + deviceIndex + " mode=" + mode + " thenLevel=" + thenLevel)
       queuedModeAction = { deviceIndex: deviceIndex, mode: mode, thenLevel: thenLevel }
       return
     }
