@@ -48,7 +48,15 @@ Panel {
   property int backlightLevel: 0
   property int keyboardBattery: -1
   readonly property bool hasKeyboard: keyboardIndex >= 0
-  readonly property bool backlightOn: backlightMode === "Manual"
+
+  // "On" is a lit keyboard, which means Manual mode *and* a non-zero level.
+  // Mode alone is not enough: switching Disabled -> Manual resets the live
+  // level to 0 while solaar still reports the saved value, so a keyboard in
+  // Manual at level 0 is physically dark.
+  readonly property bool backlightOn: backlightMode === "Manual" && backlightLevel > 0
+
+  // Level to restore when switching back on, remembered across an off.
+  property int lastOnLevel: 0
 
   readonly property var otherDevices: {
     var list = []
@@ -87,6 +95,7 @@ Panel {
       backlightMode = d.backlightMode !== null ? d.backlightMode : ""
       backlightLevel = d.backlightLevel !== null ? d.backlightLevel : 0
       keyboardBattery = d.batteryPercent !== null ? d.batteryPercent : -1
+      if (backlightLevel > 0) lastOnLevel = backlightLevel
       return
     }
     keyboardIndex = -1
@@ -96,28 +105,32 @@ Panel {
     keyboardBattery = -1
   }
 
+  // Off is level 0 rather than mode Disabled. Keeping the device permanently
+  // in Manual means a toggle is a single level write whose value always
+  // differs from the previous one (0 <-> N), so solaar never skips it as a
+  // no-op -- and there is no mode switch to reset the live level behind our
+  // back. Both were why the light stayed dark until you nudged the slider.
   function toggleBacklight() {
     if (!hasKeyboard) return
-    if (!backlightOn) {
-      var level = backlightLevel > 0 ? backlightLevel : defaultOnLevel
-      // Optimistic: these are real properties, so the UI updates instantly
-      // and the next refresh() reconciles against the device.
-      backlightMode = "Manual"
-      backlightLevel = level
-      ensureManualThenSetLevel(keyboardIndex, level)
+    if (backlightOn) {
+      lastOnLevel = backlightLevel
+      setBrightness(0)
     } else {
-      backlightMode = "Disabled"
-      setMode(keyboardIndex, "Disabled")
+      setBrightness(lastOnLevel > 0 ? lastOnLevel : defaultOnLevel)
     }
   }
 
   function setBrightness(level) {
     if (!hasKeyboard) return
-    var needsModeSwitch = !backlightOn
+    var needsModeSwitch = backlightMode !== "Manual"
     backlightLevel = level
-    if (needsModeSwitch) backlightMode = "Manual"
-    if (needsModeSwitch) ensureManualThenSetLevel(keyboardIndex, level)
-    else setLevel(keyboardIndex, level)
+    if (level > 0) lastOnLevel = level
+    if (needsModeSwitch) {
+      backlightMode = "Manual"
+      ensureManualThenSetLevel(keyboardIndex, level)
+    } else {
+      setLevel(keyboardIndex, level)
+    }
   }
 
   // Setting Process.running = true while it is already running is a no-op
@@ -148,7 +161,6 @@ Panel {
     modeProc.pendingLevel = thenLevel
     modeProc.pendingDeviceIndex = deviceIndex
     modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", mode]
-    console.log("mx-quick-control: running: " + modeProc.command.join(" "))
     modeProc.running = true
   }
 
@@ -274,12 +286,6 @@ Panel {
     id: modeProc
     property int pendingLevel: -1
     property int pendingDeviceIndex: -1
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        if (text.trim() !== "") console.log("mx-quick-control: modeProc stderr: " + text.trim())
-      }
-    }
     onExited: function(exitCode) {
       // The follow-up level write belongs to the mode change that just
       // landed, so it takes precedence over anything queued behind it.
@@ -288,7 +294,18 @@ Panel {
         var idx = pendingDeviceIndex
         pendingLevel = -1
         pendingDeviceIndex = -1
-        root.setLevel(idx, lvl)
+        // A mode switch resets the live level to 0 while solaar's saved
+        // value is unchanged, so writing the target directly can be dropped
+        // as a no-op. Write 0 first to make the saved value differ, then
+        // chain the real target, which is then guaranteed to reach the
+        // device. Only the rare mode-switch path pays for the extra write.
+        if (lvl > 0) {
+          levelProc.followupLevel = lvl
+          levelProc.followupDeviceIndex = idx
+          root.setLevel(idx, 0)
+        } else {
+          root.setLevel(idx, lvl)
+        }
         return
       }
       if (root.queuedModeAction || root.queuedLevel >= 0) {
@@ -306,6 +323,10 @@ Panel {
     id: levelProc
     property int targetDeviceIndex: -1
     property int targetLevel: -1
+    // Set when this write is the "0 first" half of a mode-switch chain; the
+    // real target follows once this one lands.
+    property int followupLevel: -1
+    property int followupDeviceIndex: -1
     stderr: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -317,6 +338,14 @@ Panel {
       }
     }
     onExited: function(exitCode) {
+      if (followupLevel >= 0) {
+        var l = followupLevel
+        var d = followupDeviceIndex
+        followupLevel = -1
+        followupDeviceIndex = -1
+        root.setLevel(d, l)
+        return
+      }
       if (root.queuedModeAction || root.queuedLevel >= 0) {
         root.drainQueued()
         return
