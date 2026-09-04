@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    name: Unit + functional tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # No `npm ci`: the suite uses node's built-in test runner and the
+      # plugin itself has no JS dependencies at all. Nothing to install.
+      - name: Run tests
+        run: npm test
+
+  manifest:
+    name: Plugin manifest is valid
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Mirrors the checks omarchy-plugin-validate performs, so a manifest
+      # that the Omarchy shell would reject fails here instead of failing on
+      # a user's machine at install time. Omarchy itself is not available on
+      # a GitHub runner, hence the reimplementation rather than calling it.
+      - name: Validate manifest.json
+        run: |
+          set -euo pipefail
+          test -f manifest.json || { echo "manifest.json must be at the repo root"; exit 1; }
+          jq -e . manifest.json >/dev/null
+          jq -e '.schemaVersion == 1' manifest.json >/dev/null \
+            || { echo "schemaVersion must be the number 1"; exit 1; }
+          for field in id name version kinds entryPoints; do
+            jq -e --arg f "$field" 'has($f)' manifest.json >/dev/null \
+              || { echo "manifest missing required field: $field"; exit 1; }
+          done
+          id=$(jq -r '.id' manifest.json)
+          [[ $id =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] \
+            || { echo "invalid plugin id: $id"; exit 1; }
+          [[ $id != omarchy.* ]] \
+            || { echo "omarchy.* is reserved for first-party plugins"; exit 1; }
+          jq -e '(.kinds | type) == "array" and (.kinds | length) > 0' manifest.json >/dev/null \
+            || { echo "kinds must be a non-empty array"; exit 1; }
+          # Every declared entry point must be a safe relative path that exists.
+          while read -r entry; do
+            case "$entry" in
+              /*|*..*) echo "unsafe entry point path: $entry"; exit 1 ;;
+            esac
+            test -f "$entry" || { echo "entry point not found: $entry"; exit 1; }
+          done < <(jq -r '.entryPoints[]' manifest.json)
+          echo "manifest.json OK ($id)"
+
+      - name: No emoji in shipped QML
+        run: |
+          set -euo pipefail
+          # First-party Omarchy widgets use Nerd Font glyphs; emoji render in
+          # another font, at another weight, and ignore the theme colour.
+          if grep -qP '[\x{1F300}-\x{1FAFF}]' ./*.qml; then
+            echo "emoji found in QML; use a Nerd Font glyph instead"
+            grep -nP '[\x{1F300}-\x{1FAFF}]' ./*.qml
+            exit 1
+          fi
+          echo "no emoji in QML"
