@@ -84,10 +84,13 @@ the widget if the bar is rearranged.
         - <kbd>←</kbd>/<kbd>→</kbd> change the brightness level — **works**
         - <kbd>↑</kbd>/<kbd>↓</kbd> moving the cursor between the toggle row
           and the slider row — **works**
-      Still unconfirmed, and not to be claimed until someone presses them:
-        - <kbd>Esc</kbd> closing the panel
+        - <kbd>Esc</kbd> closing the panel — **works**
+      Still unconfirmed, and not to be claimed until someone presses it:
         - <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> reaching the
-          adjacent panels (agents, bluetooth) and coming back
+          adjacent panels (agents, bluetooth) and coming back. This is the
+          one most likely to be broken: it depends on the bar coordinator
+          finding this widget's slot via `Bar.switchPanelFrom`, which is the
+          only part of the chain not exercised by the other five paths.
 - [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
       when the panel is opened with the mouse, and decide what should happen
       when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel
