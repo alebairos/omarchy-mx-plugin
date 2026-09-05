@@ -55,7 +55,7 @@ determines acceptance, so it outranks packaging polish.
 - [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls *(verified at the keyboard — see T028)*
 - [ ] T010 [US2] Handle `bar.vertical` deliberately in both the bar button and the panel layout (the fixed-width slider row currently assumes horizontal)
 - [x] T011 [US2] Middle-click on the bar icon launches Solaar, as the escape hatch to every setting this widget deliberately does not expose
-- [ ] T012 [US2] Emit the standard Omarchy OSD on backlight level change, as volume and screen brightness already do
+- [x] T012 [US2] Emit the standard Omarchy OSD on backlight level change, as volume and screen brightness already do *(payload contract verified; on-screen appearance needs a human — see T034)*
 
 **Checkpoint**: Beside built-in widgets, on both themes and both bar orientations, keyboard-only — nothing gives it away.
 
@@ -92,6 +92,10 @@ the widget if the bar is rearranged.
           chain the other five paths did not exercise.
       All six keyboard paths are confirmed at the keyboard; this task is
       done.
+- [ ] T034 [US2] **HITL:** confirm the OSD actually appears on a backlight
+      change and reads sensibly — the keyboard icon, and "3/7" rather than a
+      percentage, with "Off" at level 0. The payload is accepted (`summon`
+      returns ok) but whether it *looks* right cannot be checked from here.
 - [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
       when the panel is opened with the mouse, and decide what should happen
       when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel
