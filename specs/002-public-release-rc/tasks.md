@@ -77,13 +77,17 @@ built-in panels — the `Panel` base supplies the `open()` / `close()` /
 was needed for summoning; the numbering is positional, so the hotkey follows
 the widget if the bar is rearranged.
 
-- [ ] T028 [US2] **HITL verification of in-panel navigation.** With the panel
-      open: arrow up/down moves the cursor between the backlight toggle and
-      the brightness slider; left/right on the slider row changes brightness
-      and the keyboard visibly responds; Enter on the toggle switches the
-      backlight; Esc closes the panel; Tab and Shift+Tab move to the
-      adjacent panels (agents, bluetooth) and back. Requires a human at the
-      keyboard — key events cannot be synthesised from this side.
+- [~] T028 [US2] **HITL verification of in-panel navigation.** Partially
+      confirmed at the keyboard on 2026-09-05:
+        - `SUPER + CTRL + 1` summons the panel — **works**
+        - <kbd>Enter</kbd> toggles the backlight on and off — **works**
+        - <kbd>←</kbd>/<kbd>→</kbd> change the brightness level — **works**
+      Still unconfirmed, and not to be claimed until someone presses them:
+        - <kbd>↑</kbd>/<kbd>↓</kbd> moving the cursor between the toggle row
+          and the slider row
+        - <kbd>Esc</kbd> closing the panel
+        - <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> reaching the
+          adjacent panels (agents, bluetooth) and coming back
 - [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
       when the panel is opened with the mouse, and decide what should happen
       when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel
