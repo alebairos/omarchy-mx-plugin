@@ -67,7 +67,41 @@ Panel {
     return list
   }
 
-  visible: solaarAvailable && devices.length > 0
+  // Stay visible even when there is nothing to control. Hiding silently is
+  // indistinguishable from the plugin being broken, and someone who put this
+  // widget on their bar asked to see it -- so say what is wrong instead of
+  // vanishing. Constitution Principle IV allows either; a disabled state
+  // that explains itself is the more useful half.
+  visible: true
+
+  // Empty string means "there is a keyboard and all is well".
+  readonly property string unavailableReason: {
+    if (!solaarAvailable) return "solaar-missing"
+    if (devices.length === 0) return "no-devices"
+    if (!hasKeyboard) return "no-backlight-device"
+    return ""
+  }
+
+  readonly property string unavailableTitle: {
+    switch (unavailableReason) {
+    case "solaar-missing": return "Solaar is not installed"
+    case "no-devices": return "No Logitech devices detected"
+    case "no-backlight-device": return "No backlight-capable keyboard"
+    default: return ""
+    }
+  }
+
+  readonly property string unavailableDetail: {
+    switch (unavailableReason) {
+    case "solaar-missing":
+      return "This widget drives your keyboard through Solaar.\nInstall it with:  sudo pacman -S solaar"
+    case "no-devices":
+      return "Solaar is installed but reports no paired devices.\nCheck the receiver is plugged in and the device is switched on."
+    case "no-backlight-device":
+      return "Paired devices were found, but none report a backlight.\nBattery status is shown below."
+    default: return ""
+    }
+  }
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -175,11 +209,32 @@ Panel {
     if (exitCode === 0 || !hasKeyboard) return
     // Deferred for the same reason as drainQueued(): the Process that just
     // failed still reads as running inside its own onExited.
-    Qt.callLater(function() {
-      if (root.solaarBusy) return
-      verifyProc.command = ["solaar", "config", String(root.keyboardIndex), "backlight"]
-      verifyProc.running = true
-    })
+    Qt.callLater(function() { root.refreshBacklight() })
+  }
+
+  // Re-read just the backlight fields, one targeted `solaar config` call per
+  // field (~2.3s each) instead of the ~10.5s full device enumeration. Used
+  // when the panel opens, and after a write that failed.
+  property var verifyQueue: []
+
+  function refreshBacklight() {
+    if (!hasKeyboard) return
+    verifyQueue = ["backlight", "backlight_level"]
+    runNextVerify()
+  }
+
+  function runNextVerify() {
+    if (verifyQueue.length === 0) return
+    if (solaarBusy) {
+      // A write in flight will publish a newer value than this read would,
+      // so drop the read rather than queue behind it and overwrite.
+      verifyQueue = []
+      return
+    }
+    var next = verifyQueue[0]
+    verifyQueue = verifyQueue.slice(1)
+    verifyProc.command = ["solaar", "config", String(keyboardIndex), next]
+    verifyProc.running = true
   }
 
   // Replay whatever was deferred while solaar was busy. Mode first: a queued
@@ -342,11 +397,18 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        var modeMatch = text.match(/backlight\s*=\s*(\w+)/)
-        if (modeMatch) root.backlightMode = modeMatch[1]
-        var levelMatch = text.match(/backlight_level\s*=\s*(\d+)/)
-        if (levelMatch) root.backlightLevel = parseInt(levelMatch[1], 10)
+        var r = Model.parseConfigRead(text)
+        if (r.mode !== null) root.backlightMode = r.mode
+        if (r.level !== null) {
+          root.backlightLevel = r.level
+          if (r.level > 0) root.lastOnLevel = r.level
+        }
       }
+    }
+    onExited: function(exitCode) {
+      // Chain the next targeted read, deferred so `running` has settled --
+      // the same hazard as drainQueued().
+      Qt.callLater(root.runNextVerify)
     }
   }
 
@@ -384,8 +446,7 @@ Panel {
     text: root.backlightOn ? "󰌌" : "󰌐"   // mdi-keyboard / mdi-keyboard-off
     active: root.backlightOn
     tooltipText: {
-      if (!root.solaarAvailable) return "Solaar not installed"
-      if (!root.hasKeyboard) return "No Logitech keyboard detected"
+      if (root.unavailableReason !== "") return root.unavailableTitle
       return root.keyboardName + (root.keyboardBattery >= 0 ? " · " + root.keyboardBattery + "%" : "")
         + " · backlight " + (root.backlightOn ? root.backlightLevel : "off")
     }
@@ -430,6 +491,13 @@ Panel {
     if (opened) {
       cursorActive = false
       cursorIndex = 0
+      // The backlight can be changed outside this widget -- in Solaar's own
+      // window, or with the keyboard's Fn keys -- and the full `solaar show`
+      // refresh only runs every 300s, so the panel could open showing state
+      // up to five minutes stale. Re-read on open, but with the targeted
+      // call (~2.3s) rather than the full enumeration (~10.5s): opening the
+      // panel should not cost what a device scan costs.
+      refreshBacklight()
     }
   }
 
@@ -463,16 +531,16 @@ Panel {
       spacing: Style.space(12)
 
       PanelSectionHeader {
-        text: root.hasKeyboard ? root.keyboardName : "MX Quick Control"
+        text: root.hasKeyboard ? root.keyboardName : root.unavailableTitle
         foreground: root.bar.foreground
       }
 
       Text {
-        visible: !root.hasKeyboard
+        visible: root.unavailableReason !== ""
         width: parent.width
         textFormat: Text.PlainText
-        text: root.devices.length === 0 ? "No Logitech devices detected" : "No backlight-capable device paired"
-        color: root.bar.foreground
+        text: root.unavailableDetail
+        color: Qt.darker(root.bar.foreground, 1.3)
         font.family: root.bar.fontFamily
         wrapMode: Text.WordWrap
       }
