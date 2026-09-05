@@ -31,7 +31,11 @@ what lands on your machine when you install it.
   anything naming Solaar, the backlight, or this device matched exactly one
   file in it — and is regenerable with `specify init`, so it was pure noise
   in a directory Omarchy explicitly asks users to review before enabling.
-  The install is roughly a quarter of its former size.
+  A fresh install goes from 676K to 504K. The saving is smaller than the
+  removed 5,100 lines suggests, because `plugin add` clones full history
+  and the deleted files therefore still travel in `.git`; the real win is
+  that the working tree a reviewer opens now contains only the plugin, its
+  tests and its reasoning.
 
 ### Added
 
