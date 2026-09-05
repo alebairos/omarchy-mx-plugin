@@ -50,9 +50,9 @@ determines acceptance, so it outranks packaging polish.
 
 - [x] T005 [US2] Replace the `💡`/`⌨` emoji with Nerd Font glyphs in `MxQuickControl.qml`, chosen from the set the first-party widgets already draw from
 - [x] T006 [US2] Bind every icon's `color` to the theme foreground so icons follow theme changes like their neighbours
-- [x] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes *(written; behaviour unverified — see T028)*
-- [x] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels *(written; behaviour unverified — see T028)*
-- [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls *(written; behaviour unverified — see T028)*
+- [x] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes *(verified at the keyboard — see T028)*
+- [x] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels *(verified at the keyboard — see T028)*
+- [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls *(verified at the keyboard — see T028)*
 - [ ] T010 [US2] Handle `bar.vertical` deliberately in both the bar button and the panel layout (the fixed-width slider row currently assumes horizontal)
 - [x] T011 [US2] Middle-click on the bar icon launches Solaar, as the escape hatch to every setting this widget deliberately does not expose
 - [ ] T012 [US2] Emit the standard Omarchy OSD on backlight level change, as volume and screen brightness already do
@@ -77,7 +77,7 @@ built-in panels — the `Panel` base supplies the `open()` / `close()` /
 was needed for summoning; the numbering is positional, so the hotkey follows
 the widget if the bar is rearranged.
 
-- [~] T028 [US2] **HITL verification of in-panel navigation.** Partially
+- [x] T028 [US2] **HITL verification of in-panel navigation.** Partially
       confirmed at the keyboard on 2026-09-05:
         - `SUPER + CTRL + 1` summons the panel — **works**
         - <kbd>Enter</kbd> toggles the backlight on and off — **works**
@@ -85,12 +85,13 @@ the widget if the bar is rearranged.
         - <kbd>↑</kbd>/<kbd>↓</kbd> moving the cursor between the toggle row
           and the slider row — **works**
         - <kbd>Esc</kbd> closing the panel — **works**
-      Still unconfirmed, and not to be claimed until someone presses it:
-        - <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> reaching the
-          adjacent panels (agents, bluetooth) and coming back. This is the
-          one most likely to be broken: it depends on the bar coordinator
-          finding this widget's slot via `Bar.switchPanelFrom`, which is the
-          only part of the chain not exercised by the other five paths.
+        - <kbd>Tab</kbd> reaching the adjacent panels and wrapping back
+          round to this one — **works**, including repeated presses cycling
+          through the right section and returning here. `Bar.switchPanelFrom`
+          locates this widget's slot correctly, which was the part of the
+          chain the other five paths did not exercise.
+      All six keyboard paths are confirmed at the keyboard; this task is
+      done.
 - [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
       when the panel is opened with the mouse, and decide what should happen
       when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel

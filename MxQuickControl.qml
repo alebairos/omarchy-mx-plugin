@@ -175,11 +175,32 @@ Panel {
     if (exitCode === 0 || !hasKeyboard) return
     // Deferred for the same reason as drainQueued(): the Process that just
     // failed still reads as running inside its own onExited.
-    Qt.callLater(function() {
-      if (root.solaarBusy) return
-      verifyProc.command = ["solaar", "config", String(root.keyboardIndex), "backlight"]
-      verifyProc.running = true
-    })
+    Qt.callLater(function() { root.refreshBacklight() })
+  }
+
+  // Re-read just the backlight fields, one targeted `solaar config` call per
+  // field (~2.3s each) instead of the ~10.5s full device enumeration. Used
+  // when the panel opens, and after a write that failed.
+  property var verifyQueue: []
+
+  function refreshBacklight() {
+    if (!hasKeyboard) return
+    verifyQueue = ["backlight", "backlight_level"]
+    runNextVerify()
+  }
+
+  function runNextVerify() {
+    if (verifyQueue.length === 0) return
+    if (solaarBusy) {
+      // A write in flight will publish a newer value than this read would,
+      // so drop the read rather than queue behind it and overwrite.
+      verifyQueue = []
+      return
+    }
+    var next = verifyQueue[0]
+    verifyQueue = verifyQueue.slice(1)
+    verifyProc.command = ["solaar", "config", String(keyboardIndex), next]
+    verifyProc.running = true
   }
 
   // Replay whatever was deferred while solaar was busy. Mode first: a queued
@@ -342,11 +363,18 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        var modeMatch = text.match(/backlight\s*=\s*(\w+)/)
-        if (modeMatch) root.backlightMode = modeMatch[1]
-        var levelMatch = text.match(/backlight_level\s*=\s*(\d+)/)
-        if (levelMatch) root.backlightLevel = parseInt(levelMatch[1], 10)
+        var r = Model.parseConfigRead(text)
+        if (r.mode !== null) root.backlightMode = r.mode
+        if (r.level !== null) {
+          root.backlightLevel = r.level
+          if (r.level > 0) root.lastOnLevel = r.level
+        }
       }
+    }
+    onExited: function(exitCode) {
+      // Chain the next targeted read, deferred so `running` has settled --
+      // the same hazard as drainQueued().
+      Qt.callLater(root.runNextVerify)
     }
   }
 
@@ -430,6 +458,13 @@ Panel {
     if (opened) {
       cursorActive = false
       cursorIndex = 0
+      // The backlight can be changed outside this widget -- in Solaar's own
+      // window, or with the keyboard's Fn keys -- and the full `solaar show`
+      // refresh only runs every 300s, so the panel could open showing state
+      // up to five minutes stale. Re-read on open, but with the targeted
+      // call (~2.3s) rather than the full enumeration (~10.5s): opening the
+      // panel should not cost what a device scan costs.
+      refreshBacklight()
     }
   }
 
