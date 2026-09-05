@@ -82,9 +82,9 @@ the widget if the bar is rearranged.
         - `SUPER + CTRL + 1` summons the panel — **works**
         - <kbd>Enter</kbd> toggles the backlight on and off — **works**
         - <kbd>←</kbd>/<kbd>→</kbd> change the brightness level — **works**
-      Still unconfirmed, and not to be claimed until someone presses them:
         - <kbd>↑</kbd>/<kbd>↓</kbd> moving the cursor between the toggle row
-          and the slider row
+          and the slider row — **works**
+      Still unconfirmed, and not to be claimed until someone presses them:
         - <kbd>Esc</kbd> closing the panel
         - <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> reaching the
           adjacent panels (agents, bluetooth) and coming back
