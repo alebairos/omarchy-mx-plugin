@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "alebairos.mx-quick-control",
   "name": "MX Quick Control",
-  "version": "1.0.0-rc.2",
+  "version": "1.0.0-rc.3",
   "author": "Alexandre Bairos",
   "description": "Battery status and one-click backlight control for Logitech MX peripherals, powered by Solaar",
   "kinds": [

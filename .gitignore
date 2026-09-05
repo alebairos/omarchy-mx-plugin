@@ -1,7 +1,23 @@
-# Claude Code local/session state — never committed even though .claude/skills/ (prompts only) is tracked
-.claude/settings.local.json
-.claude/*.local.json
-.claude/.credentials.json
+# Everything in this repository is cloned onto a user's machine: `omarchy
+# plugin add` performs a full `git clone` into ~/.config/omarchy/plugins/.
+# Plugins run unsandboxed, and Omarchy tells users to review the code before
+# enabling it, so anything that is not the plugin, its tests, or the
+# reasoning behind it is noise in the way of that review. Keep it out.
+
+# Spec-kit scaffolding. Generic, identical in every spec-kit project, and
+# regenerable with `specify init` — it carries no information about *this*
+# project. The one project-specific artefact it used to hold, the
+# constitution, lives in specs/constitution.md instead.
+.specify/
+.claude/
+
+# Agent and editor local state
+CLAUDE.local.md
+.vscode/
+.idea/
+
+# Node is used only to run the test suite; the plugin ships no JS deps.
+node_modules/
 
 # OS/editor cruft
 .DS_Store
