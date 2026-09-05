@@ -17,6 +17,41 @@ settings from `shell.json`, an explicit "Solaar not installed" state, and a
 README rewrite that separates verified hardware from hardware merely
 expected to work.
 
+## [1.0.0-rc.3] — 2026-09-04
+
+Housekeeping release. No change to how the plugin behaves; a large change to
+what lands on your machine when you install it.
+
+### Removed
+
+- **Spec-kit scaffolding (`.specify/`, `.claude/skills/speckit-*`)**, about
+  5,100 lines. `omarchy plugin add` performs a full `git clone` into
+  `~/.config/omarchy/plugins/`, so everything in this repository is copied
+  onto every user's machine. That scaffolding is generic — a grep for
+  anything naming Solaar, the backlight, or this device matched exactly one
+  file in it — and is regenerable with `specify init`, so it was pure noise
+  in a directory Omarchy explicitly asks users to review before enabling.
+  The install is roughly a quarter of its former size.
+
+### Added
+
+- **`CONTRIBUTING.md`** — how to test, how to verify against the device
+  rather than the widget, and the device quirks that look like redundant
+  work and must not be "simplified" away.
+- **`AGENTS.md`** — guidance for AI agents and their supervisors, recording
+  the failure modes this project has already hit: QML not observing plain
+  object mutations, `rescanPlugins` silently not reloading a changed root
+  type, astral-plane glyphs mangled by naive edits, and the instruction not
+  to trust a green test suite without breaking the code first.
+- A CI check that the scaffolding cannot creep back and that every document
+  contributors are pointed at actually exists.
+
+### Changed
+
+- The project constitution moved from `.specify/memory/constitution.md` to
+  **`specs/constitution.md`**, so the one project-specific file in the
+  removed scaffolding survives where the rest of the reasoning lives.
+
 ## [1.0.0-rc.2] — 2026-09-04
 
 First release with automated tests and CI. Everything below was verified
@@ -119,6 +154,7 @@ verification, and are the reason the test suite in `rc.2` exists.
 - Plugin id namespaced to the publisher; `omarchy.*` is reserved for
   first-party plugins and installation is refused outright.
 
-[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.2...HEAD
+[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.3...HEAD
+[1.0.0-rc.3]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/alebairos/omarchy-mx-plugin/releases/tag/v1.0.0-rc.1

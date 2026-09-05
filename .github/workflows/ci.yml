@@ -59,6 +59,27 @@ jobs:
           done < <(jq -r '.entryPoints[]' manifest.json)
           echo "manifest.json OK ($id)"
 
+      - name: Repository ships only what a user needs
+        run: |
+          set -euo pipefail
+          # `omarchy plugin add` does a full git clone into the user's
+          # ~/.config/omarchy/plugins/, so everything here lands on their
+          # machine. Plugins run unsandboxed and Omarchy asks users to review
+          # the code before enabling it, so generic tooling that carries no
+          # information about this project must not creep back in.
+          fail=0
+          for path in .specify .claude node_modules; do
+            if [ -e "$path" ]; then
+              echo "::error::$path is committed but ships to every user; keep it out (see .gitignore)"
+              fail=1
+            fi
+          done
+          # The docs a contributor or agent is pointed at must actually exist.
+          for doc in README.md CONTRIBUTING.md AGENTS.md CHANGELOG.md specs/constitution.md; do
+            test -f "$doc" || { echo "::error::missing $doc"; fail=1; }
+          done
+          exit $fail
+
       - name: No emoji in shipped QML
         run: |
           set -euo pipefail

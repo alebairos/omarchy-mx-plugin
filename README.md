@@ -48,7 +48,7 @@ for the exact commands and output this plugin depends on.
 
 ## Design principles
 
-See [`.specify/memory/constitution.md`](.specify/memory/constitution.md) for
+See [`specs/constitution.md`](specs/constitution.md) for
 the project's governing principles — in short: shell out to `solaar` rather
 than reimplementing HID++, keep the plugin to the standard Omarchy
 `bar-widget` shape, and stay as simple as the use case actually requires.
