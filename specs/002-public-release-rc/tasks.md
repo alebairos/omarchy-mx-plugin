@@ -92,6 +92,42 @@ the widget if the bar is rearranged.
           chain the other five paths did not exercise.
       All six keyboard paths are confirmed at the keyboard; this task is
       done.
+- [ ] T035 **OSD and sync when the backlight is changed with the hardware
+      backlight keys (F4 / F5, pressed bare — this keyboard has `fn-swap`
+      enabled, so the special function is the unmodified press).** Currently the OSD only appears for changes this
+      widget makes; a hardware key press changes the device without the
+      plugin being involved, so nothing is shown and the displayed level is
+      stale until the panel is next opened (which does re-read it, per T013).
+
+      **Correcting an earlier claim in this plan:** I previously wrote that
+      the backlight was firmware-local and invisible to the host. That is
+      wrong for the *level*. Watching `/dev/hidraw2` and evdev while pressing
+      F4/F5 shows both:
+
+      ```
+      11 01 0b 00 08 04 05 ...   HID++: device 1, feature 0x0b = BACKLIGHT2,
+                   ^^            carrying the new level (observed 0..6)
+      evdev key code 62 / 63     KEY_F4 / KEY_F5 also reach the host
+      ```
+
+      So the device *does* broadcast the new level on every hardware change.
+
+      The catch is how to consume it without breaking the constitution:
+        - Reading `/dev/hidraw2` directly reimplements HID++ (Principle II)
+          and contends with Solaar for the device. No.
+        - Running `solaar -d` as a long-lived process to scrape its debug log
+          is a daemon in all but name (Principle V). No.
+        - **Solaar rules** (`~/.config/solaar/rules.yaml`) are the promising
+          route: rules consume exactly this notification stream and can
+          execute a command, so a rule could call this widget's existing IPC
+          `refresh`. That is using Solaar as designed rather than around it.
+          The Wayland warning Solaar prints concerns modifier keys and
+          process detection, not running commands — needs confirming.
+        - Binding F4/F5 in Hyprland would work but swallows those keys from
+          every application. Rejected unless nothing else pans out.
+
+      Not a 1.0.0 blocker: the panel already re-reads on open, so the widget
+      never *lies*, it is just late.
 - [ ] T034 [US2] **HITL:** confirm the OSD actually appears on a backlight
       change and reads sensibly — the keyboard icon, and "3/7" rather than a
       percentage, with "Off" at level 0. The payload is accepted (`summon`
@@ -187,7 +223,15 @@ a library that already works. The legitimate route is upstream: Solaar (or
 `python-logitech-receiver`) gains effect support, and this plugin then
 exposes it in one more row for free.
 
-- [ ] T032 **Investigate whether the effects are reachable at all.** Check
+- [ ] T032 **Investigate whether the effects are reachable at all.**
+      **Note added after T035:** the evidence below came entirely from
+      diffing `solaar show` output. The HID++ *notification stream* was never
+      examined, and it demonstrably carries backlight level changes that
+      `solaar show` polling does not surface until re-read. So "not visible
+      in `solaar show`" is weaker evidence than it looked: the effects may
+      well be announced in a notification nobody has watched for. Repeat the
+      hidraw capture from T035 while cycling the effects before concluding
+      anything. Check
       whether Logi Options+ on Windows changes anything observable over
       HID++ (a USB capture would settle it), whether the pwr-Solaar project
       has an open issue or a feature page for MX Mechanical effects, and
