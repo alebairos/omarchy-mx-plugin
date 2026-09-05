@@ -149,6 +149,61 @@ one of the two components extracted here.
 
 ---
 
+## Parked: backlight effects (investigation, not scheduled)
+
+The MX Mechanical Mini has six firmware backlight effects — Static,
+Contrast, Breathing, Wave, Reaction, Random — and `Fn` + the backlight key
+cycles them, on Linux as well as Windows. The obvious feature is a third
+panel row showing the current effect and letting you cycle it.
+
+**Parked because the evidence says the host cannot see them.** Two
+independent findings, both from this machine:
+
+1. **Solaar probed the device and recorded every lighting capability as
+   absent.** `~/.config/solaar/config.yaml` lists, under this keyboard's
+   `_absent` key: `rgb_control`, `rgb_zone_`, `per-key-lighting`,
+   `led_control`, `brightness_control`, `rgb_idle_effect`,
+   `rgb_startup_animation`, `rgb_shutdown_animation`, and more. The only
+   lighting feature present is `BACKLIGHT2 {1982}`, which exposes mode,
+   level, and three fade delays — there is no effect field.
+2. **Cycling the effects changes nothing the host can observe.** A full
+   `solaar show` was diffed against a baseline while the effects were
+   cycled by hand: the only field that ever changed was `Backlight Level`.
+   No effect state appeared anywhere in the output.
+
+Taken together: the effects live in the keyboard's firmware and are not
+reported over any HID++ feature Solaar knows about.
+
+**Why this is not simply "more work" but a constitutional question.**
+Reading or setting the effect would mean going around Solaar to
+undocumented HID++ feature pages, which Principle II of
+[the constitution](../constitution.md) forbids outright — that principle
+exists precisely so this plugin does not become a half-reimplementation of
+a library that already works. The legitimate route is upstream: Solaar (or
+`python-logitech-receiver`) gains effect support, and this plugin then
+exposes it in one more row for free.
+
+- [ ] T032 **Investigate whether the effects are reachable at all.** Check
+      whether Logi Options+ on Windows changes anything observable over
+      HID++ (a USB capture would settle it), whether the pwr-Solaar project
+      has an open issue or a feature page for MX Mechanical effects, and
+      whether the effect is stored in a writable register or is purely a
+      firmware-side cycle with no host representation. Outcome is either an
+      upstream contribution or a documented "not possible", not a
+      workaround here.
+- [ ] T033 **Separately: capturing the key press.** `divert-keys` can set
+      `Backlight Down` / `Backlight Up` to `Diverted`, which makes the
+      keyboard send HID++ notifications instead of acting natively — this
+      was verified on the Emoji key earlier in the project. That is a path
+      to *knowing* the key was pressed, but note the trade-off: a diverted
+      key stops doing its firmware job, so diverting the effect-cycle key
+      would disable the very cycling it is meant to mirror. Only worth
+      pursuing if T032 finds the effect is host-settable.
+
+Neither task blocks 1.0.0.
+
+---
+
 ## Explicitly out of scope
 
 Deliberately not exposed, per constitution Principle I (Simplicity First) —
