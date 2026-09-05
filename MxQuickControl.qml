@@ -160,12 +160,34 @@ Panel {
     var needsModeSwitch = backlightMode !== "Manual"
     backlightLevel = level
     if (level > 0) lastOnLevel = level
+    showBacklightOsd(level)
     if (needsModeSwitch) {
       backlightMode = "Manual"
       ensureManualThenSetLevel(keyboardIndex, level)
     } else {
       setLevel(keyboardIndex, level)
     }
+  }
+
+  // Omarchy shows an OSD for volume and screen brightness; a keyboard
+  // backlight change is the same class of event, and not showing one is a
+  // visible inconsistency next to the built-ins. The shared OSD already
+  // carries a "keyboard" icon (the same mdi-keyboard glyph this widget uses
+  // on the bar), so nothing new is drawn -- it is summoned, like the monitor
+  // panel does for display brightness.
+  //
+  // Backlight levels are a small integer scale, not a percentage, so `max`
+  // is the device's real maximum and `progressText` shows "3/7" rather than
+  // a misleading "43%". Level 0 reads as "Off", which is what it is.
+  function showBacklightOsd(level) {
+    if (!bar || !bar.shell) return
+    var max = levelMaxByDevice[keyboardIndex] !== undefined ? levelMaxByDevice[keyboardIndex] : 7
+    bar.shell.summon("omarchy.osd", JSON.stringify({
+      icon: "keyboard",
+      value: level,
+      max: max,
+      progressText: level > 0 ? (level + "/" + max) : "Off"
+    }))
   }
 
   // Setting Process.running = true while it is already running is a no-op
