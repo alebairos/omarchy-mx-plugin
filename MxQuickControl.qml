@@ -67,7 +67,41 @@ Panel {
     return list
   }
 
-  visible: solaarAvailable && devices.length > 0
+  // Stay visible even when there is nothing to control. Hiding silently is
+  // indistinguishable from the plugin being broken, and someone who put this
+  // widget on their bar asked to see it -- so say what is wrong instead of
+  // vanishing. Constitution Principle IV allows either; a disabled state
+  // that explains itself is the more useful half.
+  visible: true
+
+  // Empty string means "there is a keyboard and all is well".
+  readonly property string unavailableReason: {
+    if (!solaarAvailable) return "solaar-missing"
+    if (devices.length === 0) return "no-devices"
+    if (!hasKeyboard) return "no-backlight-device"
+    return ""
+  }
+
+  readonly property string unavailableTitle: {
+    switch (unavailableReason) {
+    case "solaar-missing": return "Solaar is not installed"
+    case "no-devices": return "No Logitech devices detected"
+    case "no-backlight-device": return "No backlight-capable keyboard"
+    default: return ""
+    }
+  }
+
+  readonly property string unavailableDetail: {
+    switch (unavailableReason) {
+    case "solaar-missing":
+      return "This widget drives your keyboard through Solaar.\nInstall it with:  sudo pacman -S solaar"
+    case "no-devices":
+      return "Solaar is installed but reports no paired devices.\nCheck the receiver is plugged in and the device is switched on."
+    case "no-backlight-device":
+      return "Paired devices were found, but none report a backlight.\nBattery status is shown below."
+    default: return ""
+    }
+  }
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
@@ -412,8 +446,7 @@ Panel {
     text: root.backlightOn ? "󰌌" : "󰌐"   // mdi-keyboard / mdi-keyboard-off
     active: root.backlightOn
     tooltipText: {
-      if (!root.solaarAvailable) return "Solaar not installed"
-      if (!root.hasKeyboard) return "No Logitech keyboard detected"
+      if (root.unavailableReason !== "") return root.unavailableTitle
       return root.keyboardName + (root.keyboardBattery >= 0 ? " · " + root.keyboardBattery + "%" : "")
         + " · backlight " + (root.backlightOn ? root.backlightLevel : "off")
     }
@@ -498,16 +531,16 @@ Panel {
       spacing: Style.space(12)
 
       PanelSectionHeader {
-        text: root.hasKeyboard ? root.keyboardName : "MX Quick Control"
+        text: root.hasKeyboard ? root.keyboardName : root.unavailableTitle
         foreground: root.bar.foreground
       }
 
       Text {
-        visible: !root.hasKeyboard
+        visible: root.unavailableReason !== ""
         width: parent.width
         textFormat: Text.PlainText
-        text: root.devices.length === 0 ? "No Logitech devices detected" : "No backlight-capable device paired"
-        color: root.bar.foreground
+        text: root.unavailableDetail
+        color: Qt.darker(root.bar.foreground, 1.3)
         font.family: root.bar.fontFamily
         wrapMode: Text.WordWrap
       }
