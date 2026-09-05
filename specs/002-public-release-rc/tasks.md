@@ -50,14 +50,56 @@ determines acceptance, so it outranks packaging polish.
 
 - [x] T005 [US2] Replace the `💡`/`⌨` emoji with Nerd Font glyphs in `MxQuickControl.qml`, chosen from the set the first-party widgets already draw from
 - [x] T006 [US2] Bind every icon's `color` to the theme foreground so icons follow theme changes like their neighbours
-- [x] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes
-- [x] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels
-- [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls
+- [x] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes *(written; behaviour unverified — see T028)*
+- [x] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels *(written; behaviour unverified — see T028)*
+- [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls *(written; behaviour unverified — see T028)*
 - [ ] T010 [US2] Handle `bar.vertical` deliberately in both the bar button and the panel layout (the fixed-width slider row currently assumes horizontal)
 - [x] T011 [US2] Middle-click on the bar icon launches Solaar, as the escape hatch to every setting this widget deliberately does not expose
 - [ ] T012 [US2] Emit the standard Omarchy OSD on backlight level change, as volume and screen brightness already do
 
 **Checkpoint**: Beside built-in widgets, on both themes and both bar orientations, keyboard-only — nothing gives it away.
+
+---
+
+## Phase B2: Keyboard navigation, verified (P1)
+
+Keyboard operation is core to the Omarchy experience, not a nicety: every
+first-party panel is fully drivable without a pointer, and a plugin that is
+not breaks the flow the moment a user reaches for it. T007-T009 wrote the
+code; nothing has confirmed it *works*, and marking those tasks done on the
+strength of having written them was premature. These items close that gap.
+
+**Already verified** (empirically, not assumed): the panel is summonable as
+`SUPER + CTRL + 1`. `omarchy-shell shell togglePanelAt right 1` returns
+`alebairos.mx-quick-control`, so it is correctly enumerated among the
+built-in panels — the `Panel` base supplies the `open()` / `close()` /
+`opened` interface that `Bar.panelNavigationSlots` requires. Nothing extra
+was needed for summoning; the numbering is positional, so the hotkey follows
+the widget if the bar is rearranged.
+
+- [ ] T028 [US2] **HITL verification of in-panel navigation.** With the panel
+      open: arrow up/down moves the cursor between the backlight toggle and
+      the brightness slider; left/right on the slider row changes brightness
+      and the keyboard visibly responds; Enter on the toggle switches the
+      backlight; Esc closes the panel; Tab and Shift+Tab move to the
+      adjacent panels (agents, bluetooth) and back. Requires a human at the
+      keyboard — key events cannot be synthesised from this side.
+- [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
+      when the panel is opened with the mouse, and decide what should happen
+      when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel
+      arguably ought to show its cursor immediately, since the user is
+      already on the keyboard. Check what the first-party panels do and
+      match them rather than inventing behaviour.
+- [ ] T030 [US2] Verify the brightness slider is reachable and adjustable by
+      keyboard *while the backlight is off*. It is currently `enabled: false`
+      and dimmed when off, and `cursorRowCount` drops to 1, so the cursor
+      cannot reach it — which is probably right, but it means the only
+      keyboard route to turning the light on is the toggle. Confirm that is
+      the intended flow.
+- [x] T031 [US2] Document the keyboard controls in the README, including the
+      `SUPER + CTRL + <n>` summon and the fact that the number is positional.
+      Users should not have to infer that a third-party panel participates
+      in the same hotkey scheme as the built-ins.
 
 ---
 

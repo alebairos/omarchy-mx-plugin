@@ -19,9 +19,34 @@ window.
   Bluetooth and Power panels.
 - **Middle-click the bar icon** to launch Solaar, for the many settings this
   widget deliberately does not expose.
-- **Keyboard navigable**: arrow keys move between the toggle and the slider,
-  left/right adjust brightness, <kbd>Enter</kbd> activates,
-  <kbd>Esc</kbd> closes, <kbd>Tab</kbd> moves to an adjacent panel.
+- **Fully keyboard operable** — see [Keyboard control](#keyboard-control).
+
+
+## Keyboard control
+
+The panel takes part in Omarchy's normal panel hotkeys, exactly like the
+built-in ones — nothing extra to configure.
+
+| Key | Action |
+|---|---|
+| <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | Open the *n*th panel in the bar's right section |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Move between the backlight toggle and the brightness slider |
+| <kbd>←</kbd> <kbd>→</kbd> | Adjust brightness (on the slider row) |
+| <kbd>Enter</kbd> | Toggle the backlight |
+| <kbd>Esc</kbd> | Close the panel |
+| <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Move to the next/previous panel |
+
+**The summon number is positional, not fixed to this plugin.** It counts
+visible panels in the bar's right section from the left, skipping widgets
+that have no panel of their own. Rearranging your bar changes the number.
+To find the current one:
+
+```bash
+omarchy-shell shell togglePanelAt right 1   # prints the id it acted on
+```
+
+On the author's bar this widget is panel 1, so
+<kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>1</kbd> opens it.
 
 ## Requirements
 
