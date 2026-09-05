@@ -34,10 +34,10 @@ Measured or read from the installed Omarchy shell, not assumed:
 
 **Purpose**: Without this, `omarchy plugin add` refuses the repo outright.
 
-- [ ] T001 Move `plugin/manifest.json` and `plugin/MxQuickControl.qml` to the repository root; delete the now-empty `plugin/` directory
-- [ ] T002 Add `barWidget.defaultSection: "right"` to `manifest.json` (installer currently falls back to `center`)
-- [ ] T003 Remove the leftover debug `console.log` in the `dispatchMode` busy branch of `MxQuickControl.qml`
-- [ ] T004 Verify `omarchy plugin validate .` exits 0 at the repo root, and that a clean `omarchy plugin add <url> --enable` installs and enables the widget
+- [x] T001 Move `plugin/manifest.json` and `plugin/MxQuickControl.qml` to the repository root; delete the now-empty `plugin/` directory
+- [x] T002 Add `barWidget.defaultSection: "right"` to `manifest.json` (installer currently falls back to `center`)
+- [x] T003 Remove the leftover debug `console.log` in the `dispatchMode` busy branch of `MxQuickControl.qml`
+- [x] T004 Verify `omarchy plugin validate .` exits 0 at the repo root, and that a clean `omarchy plugin add <url> --enable` installs and enables the widget
 
 **Checkpoint**: The documented one-line install works on a machine that has never seen this plugin.
 
@@ -48,13 +48,13 @@ Measured or read from the installed Omarchy shell, not assumed:
 **Purpose**: Make it indistinguishable from a built-in. This is what
 determines acceptance, so it outranks packaging polish.
 
-- [ ] T005 [US2] Replace the `💡`/`⌨` emoji with Nerd Font glyphs in `MxQuickControl.qml`, chosen from the set the first-party widgets already draw from
-- [ ] T006 [US2] Bind every icon's `color` to the theme foreground so icons follow theme changes like their neighbours
-- [ ] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes
-- [ ] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels
-- [ ] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls
+- [x] T005 [US2] Replace the `💡`/`⌨` emoji with Nerd Font glyphs in `MxQuickControl.qml`, chosen from the set the first-party widgets already draw from
+- [x] T006 [US2] Bind every icon's `color` to the theme foreground so icons follow theme changes like their neighbours
+- [x] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes
+- [x] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels
+- [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls
 - [ ] T010 [US2] Handle `bar.vertical` deliberately in both the bar button and the panel layout (the fixed-width slider row currently assumes horizontal)
-- [ ] T011 [US2] Middle-click on the bar icon launches Solaar, as the escape hatch to every setting this widget deliberately does not expose
+- [x] T011 [US2] Middle-click on the bar icon launches Solaar, as the escape hatch to every setting this widget deliberately does not expose
 - [ ] T012 [US2] Emit the standard Omarchy OSD on backlight level change, as volume and screen brightness already do
 
 **Checkpoint**: Beside built-in widgets, on both themes and both bar orientations, keyboard-only — nothing gives it away.
@@ -68,6 +68,8 @@ determines acceptance, so it outranks packaging polish.
 - [ ] T015 [US3] Replace the silent hide when `solaar` is missing with an explicit panel state naming the install command
 - [ ] T016 Probe the device's real maximum backlight level rather than assuming 7 until a write is rejected — or, if no clean probe exists, document the assumption as a known limitation
 
+- [ ] T027 [US3] Document, or fix, that `omarchy plugin remove` also drops the widget's bar-layout entry, so a reinstall needs `omarchy plugin enable` again (found by reinstalling from GitHub; now stated in the README)
+
 **Checkpoint**: The widget tells the truth about the device and about itself, and can be tuned like any other widget.
 
 ---
@@ -77,11 +79,11 @@ determines acceptance, so it outranks packaging polish.
 **Purpose**: Close the project's largest gap. Every defect in 001 lived in
 one of the two components extracted here.
 
-- [ ] T017 Extract the `solaar` output parser and the write/queue state machine from `MxQuickControl.qml` into `Model.js`, following Omarchy's own convention (`bar/BarModel.js`, `panels/power/Model.js`)
-- [ ] T018 [P] Unit-test the parser against real `solaar show` fixtures: the `(saved)` versus live duplicate-field trap, a device with no battery, a mouse-only device, no devices at all, and malformed output
-- [ ] T019 [P] Unit-test the state machine: toggle maths, level clamping, and queue/drain ordering under overlapping requests
-- [ ] T020 Integration test driving the widget with a fake `solaar` on `PATH` that returns fixtures and records invocations, asserting **the exact commands issued** — the check that would have caught the dropped-write defect
-- [ ] T021 [P] GitHub Actions workflow running the unit tests on push
+- [x] T017 Extract the `solaar` output parser and the write/queue state machine from `MxQuickControl.qml` into `Model.js`, following Omarchy's own convention (`bar/BarModel.js`, `panels/power/Model.js`)
+- [x] T018 [P] Unit-test the parser against real `solaar show` fixtures: the `(saved)` versus live duplicate-field trap, a device with no battery, a mouse-only device, no devices at all, and malformed output
+- [x] T019 [P] Unit-test the state machine: toggle maths, level clamping, and queue/drain ordering under overlapping requests
+- [x] T020 Integration test driving the widget with a fake `solaar` on `PATH` that returns fixtures and records invocations, asserting **the exact commands issued** — the check that would have caught the dropped-write defect
+- [x] T021 [P] GitHub Actions workflow running the unit tests on push
 
 **Checkpoint**: Reintroducing any 001-era defect fails a test.
 
@@ -89,10 +91,11 @@ one of the two components extracted here.
 
 ## Phase E: Release (P3)
 
-- [ ] T022 [P] Rewrite `README.md` around the one-line install, with a screenshot and an explicit supported-devices section separating *verified* hardware from *expected to work*
-- [ ] T023 [P] Add `CHANGELOG.md`
-- [ ] T024 Set version `1.0.0-rc.1` in `manifest.json` and tag the release
-- [ ] T025 Re-run the full manual verification from [001's quickstart](../001-mx-quick-control/quickstart.md) against the restructured, renamed build before tagging
+- [x] T022 [P] Rewrite `README.md` around the one-line install, with a screenshot and an explicit supported-devices section separating *verified* hardware from *expected to work*
+- [x] T023 [P] Add `CHANGELOG.md`
+- [x] T024 Version and tag each release candidate (`v1.0.0-rc.1` baseline, `v1.0.0-rc.2` tests + native look, `v1.0.0-rc.3` slimmed install + contributor docs), with GitHub releases and changelog entries
+- [ ] T026 Tag `v1.0.0` once Phases B and C close and T025 passes
+- [ ] T025 Re-run the full manual verification from [001's quickstart](../001-mx-quick-control/quickstart.md) against the final build before tagging 1.0.0 — including a from-scratch `omarchy plugin add` on a clean machine, both bar orientations, and a light and a dark theme
 
 ---
 
