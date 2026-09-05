@@ -36,6 +36,13 @@ built-in ones — nothing extra to configure.
 | <kbd>Esc</kbd> | Close the panel |
 | <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Move to the next/previous panel |
 
+Your keyboard's own backlight keys (**F4** and **F5** on the MX Mechanical
+Mini, pressed without Fn) keep working exactly as they always did — they are
+handled by the keyboard's firmware, not by this widget. The widget is not
+told about those presses as they happen, so it picks the new level up the
+next time you open the panel. No on-screen display appears for them, unlike
+changes made from the panel itself.
+
 **The summon number is positional, not fixed to this plugin.** It counts
 visible panels in the bar's right section from the left, skipping widgets
 that have no panel of their own. Rearranging your bar changes the number.
