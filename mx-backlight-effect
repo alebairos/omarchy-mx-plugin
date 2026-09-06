@@ -24,6 +24,10 @@ FEATURE_FN_GET_CONFIG = 0x00
 FEATURE_FN_SET_CONFIG = 0x10
 FEATURE_FN_GET_STATE = 0x20
 
+# Long enough for the keyboard to actually drop the LEDs, short enough not to
+# read as a blink. Tuned on hardware.
+RESET_PULSE_SECONDS = 0.2
+
 
 def fail(message, code=1):
     print(message, file=sys.stderr)
@@ -157,6 +161,20 @@ def main():
         state["dhi"],
         state["dpow"],
     )
+    # Switching effect alone does not re-initialise the per-key LEDs: the
+    # keyboard stops animating and leaves whatever frame it was on, so going
+    # from Wave to Static gives a *frozen wave*, and from Breathing a static
+    # snapshot at whatever brightness the pulse happened to be. Re-sending the
+    # same effect does not clear it. Briefly powering the backlight down first
+    # does -- confirmed on hardware -- so every effect change is preceded by a
+    # short off-pulse.
+    off = struct.pack(
+        "<BBBBHHH", 0, state["options"], target, 0,
+        state["dho"], state["dhi"], state["dpow"],
+    )
+    device.feature_request(feature.BACKLIGHT2, FEATURE_FN_SET_CONFIG, off)
+    time.sleep(RESET_PULSE_SECONDS)
+
     if device.feature_request(feature.BACKLIGHT2, FEATURE_FN_SET_CONFIG, payload) is None:
         fail(f"device rejected effect {target}", 6)
     print(f"effect={target}")
