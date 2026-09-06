@@ -80,6 +80,21 @@ jobs:
           done
           exit $fail
 
+      - name: No real device identifiers in fixtures
+        run: |
+          set -euo pipefail
+          # Fixtures are captured from real hardware for realism, which makes
+          # it easy to commit a receiver or device serial by accident. They
+          # are not credentials, but they are hardware fingerprints with no
+          # reason to be public. Placeholders are all A/B/0 runs; anything
+          # else that looks like a Logitech serial fails the build.
+          if grep -rnE "(Serial(\s+number)?\s*:|Unit ID:)\s*(?![AB0]+\b)[0-9A-F]{8,}" \
+               tests/fixtures/ 2>/dev/null | grep -vE "[AB0]{8,}"; then
+            echo "::error::a real-looking device serial is committed in tests/fixtures/"
+            exit 1
+          fi
+          echo "fixtures carry no real device identifiers"
+
       - name: No emoji in shipped QML
         run: |
           set -euo pipefail

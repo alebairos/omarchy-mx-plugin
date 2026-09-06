@@ -3,7 +3,7 @@ solaar version 1.1.20
 Bolt Receiver
   Device path  : /dev/hidraw2
   USB id       : 046d:C548
-  Serial       : 44333332383537323132453838343431
+  Serial       : 00000000000000000000000000000000
   Has 2 paired device(s) out of a maximum of 6.
   Notifications: software present, wireless (0x000900)
   Device activity counters: 1=162, 2=114
@@ -14,9 +14,9 @@ Bolt Receiver
      Codename     : MX MCHNCL M
      Kind         : keyboard
      Protocol     : HID++ 4.5
-     Serial number: DCCF9E40
+     Serial number: AAAAAAAA
      Model ID:      B36700000000
-     Unit ID:       DCCF9E40
+     Unit ID:       AAAAAAAA
                  1: BL1 50.02.B0012
                  0: RBK 72.03.B0014
                  3: 
@@ -30,7 +30,7 @@ Bolt Receiver
             Firmware: 0 RBK 72.03.B0014 B367343F6B59
             Firmware: 3   
             Firmware: 2  72 
-            Unit ID: DCCF9E40  Model ID: B36700000000  Transport IDs: {'btleid': 'B367'}
+            Unit ID: AAAAAAAA  Model ID: B36700000000  Transport IDs: {'btleid': 'B367'}
          3: DEVICE NAME            {0005} V0     
             Name: MX Mechanical Mini
             Kind: keyboard
@@ -193,9 +193,9 @@ Bolt Receiver
      Codename     : Logi M650
      Kind         : mouse
      Protocol     : HID++ 4.5
-     Serial number: 6C1E5D7C
+     Serial number: BBBBBBBB
      Model ID:      B02A00000000
-     Unit ID:       6C1E5D7C
+     Unit ID:       BBBBBBBB
                  1: BL1 38.10.B0014
                  0: RBM 16.10.B0014
                  3: 
@@ -207,7 +207,7 @@ Bolt Receiver
             Firmware: 1 BL1 38.10.B0014 B02A430D065F
             Firmware: 0 RBM 16.10.B0014 B02A430D065F
             Firmware: 3   
-            Unit ID: 6C1E5D7C  Model ID: B02A00000000  Transport IDs: {'btleid': 'B02A'}
+            Unit ID: BBBBBBBB  Model ID: B02A00000000  Transport IDs: {'btleid': 'B02A'}
          3: DEVICE NAME            {0005} V0     
             Name: Signature M650
             Kind: mouse
