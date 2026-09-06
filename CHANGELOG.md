@@ -17,6 +17,48 @@ settings from `shell.json`, an explicit "Solaar not installed" state, and a
 README rewrite that separates verified hardware from hardware merely
 expected to work.
 
+## [1.0.0] — 2026-09-06
+
+First stable release. Verified by removing the plugin entirely and
+reinstalling from GitHub the way a new user would, then exercising every
+control against the hardware.
+
+### Added
+
+- Per-instance settings from `shell.json`: `defaultOnLevel`,
+  `refreshMinutes` and `showBattery`, read through the base panel's
+  `setting()` exactly as first-party widgets do, and clamped rather than
+  trusted.
+
+### Fixed
+
+- **A single degraded read could make the widget announce "no
+  backlight-capable keyboard" while the keyboard was working.** The device
+  answers contention with a well-formed frame that omits the `BACKLIGHT2`
+  block, so a truncated read and a keyboard without a backlight look
+  identical. A loss now requires three consecutive confirmations, with a
+  fast re-read between them.
+
+### Verified for this release
+
+- Clean `omarchy plugin add` from GitHub, with the bundled helper arriving
+  executable
+- Backlight toggle, brightness, and effect changes reaching the device
+- Panel refresh on open, and live following of the keyboard's own keys with
+  the optional Solaar rule
+- Vertical (right-side) bar
+- 33 unit and functional tests, and both CI checks
+
+### Still true, and deliberately so
+
+- Roughly two seconds per action: this shells out to `solaar` rather than
+  holding a connection, and that startup cost is the floor for anything
+  that refuses to run a daemon.
+- Only an MX Mechanical Mini and a Signature M650 on a Bolt receiver have
+  ever been tested. Everything else — other backlit keyboards, Bluetooth
+  pairing, multiple keyboards — is expected to work rather than known to.
+  Reports are welcome, especially negative ones.
+
 ## [1.0.0-rc.5] — 2026-09-06
 
 Closes the last of the README's known limitations: the panel can now follow
@@ -244,7 +286,8 @@ verification, and are the reason the test suite in `rc.2` exists.
 - Plugin id namespaced to the publisher; `omarchy.*` is reserved for
   first-party plugins and installation is refused outright.
 
-[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.5...HEAD
+[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.5...v1.0.0
 [1.0.0-rc.5]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.4...v1.0.0-rc.5
 [1.0.0-rc.4]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.2...v1.0.0-rc.3

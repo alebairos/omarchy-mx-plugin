@@ -157,13 +157,13 @@ the widget if the bar is rearranged.
       brightness changes made in the panel, and — once T035's rule was
       installed and the race above fixed — for the keyboard's own F4/F5 and
       lamp keys too.
-- [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
+- [x] T029 [US2] Confirm the cursor appears only after the first arrow press
       when the panel is opened with the mouse, and decide what should happen
       when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel
       arguably ought to show its cursor immediately, since the user is
       already on the keyboard. Check what the first-party panels do and
       match them rather than inventing behaviour.
-- [ ] T030 [US2] Verify the brightness slider is reachable and adjustable by
+- [x] T030 [US2] Verify the brightness slider is reachable and adjustable by
       keyboard *while the backlight is off*. It is currently `enabled: false`
       and dimmed when off, and `cursorRowCount` drops to 1, so the cursor
       cannot reach it — which is probably right, but it means the only
@@ -179,7 +179,7 @@ the widget if the bar is rearranged.
 ## Phase C: Freshness, honesty, and tunability (P2)
 
 - [x] T013 [US3] Targeted read (`solaar config <n> backlight`, ~2.3s) when the panel opens, so state is current without paying the 10.5s enumeration
-- [ ] T014 [US3] Expose per-instance settings via `setting()` from `shell.json`: default on-level, refresh interval, and whether to show the battery line
+- [x] T014 [US3] Expose per-instance settings via `setting()` from `shell.json`: default on-level, refresh interval, and whether to show the battery line
 - [x] T015 [US3] Replace the silent hide when `solaar` is missing with an explicit panel state naming the install command
 - [x] T016 Probe the device's real maximum backlight level rather than assuming 7 until a write is rejected. No probe needed in the end: BACKLIGHT2 fn 0x20 reports the level *count* directly, and the effect helper already reads it, so the slider maximum is now `levels - 1` from the device instead of a constant corrected by failure.
 
@@ -209,8 +209,8 @@ one of the two components extracted here.
 - [x] T022 [P] Rewrite `README.md` around the one-line install, with a screenshot and an explicit supported-devices section separating *verified* hardware from *expected to work*
 - [x] T023 [P] Add `CHANGELOG.md`
 - [x] T024 Version and tag each release candidate (`v1.0.0-rc.1` baseline, `v1.0.0-rc.2` tests + native look, `v1.0.0-rc.3` slimmed install + contributor docs), with GitHub releases and changelog entries
-- [ ] T026 Tag `v1.0.0` once Phases B and C close and T025 passes
-- [ ] T025 Re-run the full manual verification from [001's quickstart](../001-mx-quick-control/quickstart.md) against the final build before tagging 1.0.0 — including a from-scratch `omarchy plugin add` on a clean machine, both bar orientations, and a light and a dark theme
+- [x] T026 Tag `v1.0.0` once Phases B and C close and T025 passes
+- [x] T025 Re-run the full manual verification from [001's quickstart](../001-mx-quick-control/quickstart.md) against the final build before tagging 1.0.0 — including a from-scratch `omarchy plugin add` on a clean machine, both bar orientations, and a light and a dark theme
 
 ---
 
