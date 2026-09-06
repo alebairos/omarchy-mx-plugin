@@ -95,6 +95,19 @@ jobs:
           fi
           echo "fixtures carry no real device identifiers"
 
+      - name: No broken unicode escapes in QML
+        run: |
+          set -euo pipefail
+          # QML/JavaScript has no \U escape -- it wants \u{...} or the literal
+          # character. Writing "\U000F0068" renders the codepoint as visible
+          # text instead of a glyph, which shipped once already. Nerd Font
+          # icons are astral-plane, so write the character itself.
+          if grep -nP '\\U[0-9A-Fa-f]{4,8}' ./*.qml; then
+            echo "::error::invalid \\U escape in QML; use the literal character"
+            exit 1
+          fi
+          echo "no broken unicode escapes"
+
       - name: No emoji in shipped QML
         run: |
           set -euo pipefail
