@@ -144,6 +144,41 @@ where that applies.
 CI runs on every pull request, including from forks. Both checks must pass
 and the branch must be current with `main` before it can merge.
 
+### How pull requests are merged, and how to audit them
+
+**Rebase-merge only.** Squash and merge commits are disabled. Each of your
+commits arrives on `main` as its own commit, in order, and history stays
+linear.
+
+That is deliberate rather than taste. In this repository the commit messages
+carry knowledge that cannot be recovered from a diff -- why a write is sent
+twice, why "off" is a level rather than a mode, why a seemingly redundant
+step exists. Squashing a five-commit branch would fuse five explanations
+into one. So write each commit as if someone will read it alone, because
+they will.
+
+**On SHAs.** Rebasing replays your commits onto a new parent, which
+necessarily gives them new hashes. Message, author and authorship date are
+preserved; the hash is not. A linear history is by definition a rewritten
+one, so "linear history" and "byte-identical original commits" cannot both
+be true.
+
+Traceability does not depend on it. GitHub keeps every pull request's
+original commits permanently, and they remain fetchable after the branch is
+deleted:
+
+```bash
+# fetch the original, pre-rebase commits of every PR
+git fetch origin 'refs/pull/*/head:refs/remotes/pr/*'
+git log --oneline pr/3          # exactly what was proposed in PR #3
+```
+
+So the chain is: the commit on `main` says what changed and why, its message
+is unaltered from what you wrote, and `refs/pull/N/head` holds the original
+object if anyone ever needs to prove it.
+
+Merged branches are deleted automatically. Nothing is lost when they are.
+
 If you discovered something about how the device or Solaar behaves, put it
 in the commit message **and** in a code comment. That knowledge cannot be
 reconstructed from a diff, and it is the most valuable thing in this

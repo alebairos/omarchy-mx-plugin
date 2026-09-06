@@ -91,6 +91,18 @@ arrive whenever they are next at the keyboard rather than inside a timed
 window, label honestly until confirmed, and write each answer straight into
 the code with the observation as the comment.
 
+## Merging
+
+Rebase-merge only, through a pull request; `main` rejects direct pushes from
+everyone including the maintainer. Your commits land individually and keep
+their messages, so write each one to stand alone -- in this repository the
+commit message is where device behaviour is recorded, and it is the part
+nobody can reconstruct later.
+
+Original pre-rebase commits stay available at `refs/pull/N/head` if a change
+ever needs auditing:
+`git fetch origin 'refs/pull/*/head:refs/remotes/pr/*'`
+
 ## Reporting
 
 Report what was verified and how, and state plainly what was not. "Tests
