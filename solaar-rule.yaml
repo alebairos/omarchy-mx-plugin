@@ -1,0 +1,23 @@
+# Optional: show an on-screen display when the keyboard's OWN backlight keys
+# are used, and keep the panel in step with them.
+#
+# Why this is a separate, opt-in file rather than part of the plugin: the
+# device announces backlight changes over HID++, but hearing them requires a
+# process listening continuously. This plugin deliberately runs no daemon
+# (constitution Principle V). Solaar already is such a process for anyone who
+# runs it, and its rules engine exists precisely to react to notifications --
+# so the listening is delegated to a program you were already running, rather
+# than shipped as a second one.
+#
+# Requires Solaar to be running. Without it, nothing breaks: the panel simply
+# catches up the next time you open it, as it does today.
+#
+# Install by appending to ~/.config/solaar/rules.yaml (create it if absent),
+# then restart Solaar.
+
+%YAML 1.3
+---
+- Rule:
+  - Feature: BACKLIGHT2
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, deviceChanged]
+...

@@ -59,6 +59,12 @@ Panel {
   // Level to restore when switching back on, remembered across an off.
   property int lastOnLevel: 0
 
+  // Set while re-reading in response to an external change (the keyboard's
+  // own keys). The read publishes an OSD only if the value actually moved,
+  // which keeps our own writes -- which also emit notifications -- from
+  // echoing a second OSD back at the user.
+  property bool announceExternalChange: false
+
   // Backlight effect (Static / Wave / Breathing / ...). Solaar's CLI has no
   // setting for this, so it goes through the bundled mx-backlight-effect
   // helper, which uses Solaar's own logitech_receiver library rather than
@@ -266,7 +272,10 @@ Panel {
   }
 
   function runNextVerify() {
-    if (verifyQueue.length === 0) return
+    if (verifyQueue.length === 0) {
+      announceExternalChange = false
+      return
+    }
     if (solaarBusy) {
       // Wait for the device rather than giving up. Dropping the queue here
       // is why opening the panel could silently fail to refresh: any call
@@ -439,7 +448,11 @@ Panel {
       onStreamFinished: {
         var st = Model.parseEffectState(text)
         root.effectsSupported = st.supported
-        if (st.effect >= 0) root.effectIndex = st.effect
+        if (st.effect >= 0) {
+          var changed = st.effect !== root.effectIndex
+          root.effectIndex = st.effect
+          if (changed && root.announceExternalChange) root.showEffectOsd(st.effect)
+        }
         // The device reports how many levels it has, so the slider's
         // maximum is read rather than assumed. It used to default to 7 and
         // only get corrected when a write was rejected as out of range,
@@ -488,8 +501,10 @@ Panel {
         var r = Model.parseConfigRead(text)
         if (r.mode !== null) root.backlightMode = r.mode
         if (r.level !== null) {
+          var moved = r.level !== root.backlightLevel
           root.backlightLevel = r.level
           if (r.level > 0) root.lastOnLevel = r.level
+          if (moved && root.announceExternalChange) root.showBacklightOsd(r.level)
         }
       }
     }
@@ -513,6 +528,14 @@ Panel {
     // be driven and verified without a pointer -- `qs ipc call
     // alebairos.mx-quick-control backlight` etc.
     function backlight(): void { root.toggleBacklight() }
+
+    // Called by an optional Solaar rule when the device reports a backlight
+    // change made with the keyboard's own keys. Solaar is the thing
+    // listening -- this plugin runs no daemon of its own.
+    function deviceChanged(): void {
+      root.announceExternalChange = true
+      root.refreshBacklight()
+    }
     function level(value: string): void { root.setBrightness(parseInt(value, 10)) }
     function status(): string {
       if (!root.hasKeyboard) return "no backlight-capable device (devices=" + root.devices.length + ")"
