@@ -177,6 +177,54 @@ function learnLevelMax(stderrText, attemptedLevel) {
   return attemptedLevel - 1
 }
 
+// ------------------------------------------------------- backlight effects
+
+// Parse the helper's `get` line:
+//   "levels=8 level=3 effect=6 supported=0,1,2,3,4,5,6"
+// Returns effect -1 and an empty list when the line is unusable, so a caller
+// can hide the control rather than offer values the device would reject.
+function parseEffectState(text) {
+  var s = String(text || "")
+  var out = { levels: 0, level: 0, effect: -1, supported: [] }
+  var m
+
+  m = s.match(/levels=(\d+)/);        if (m) out.levels = parseInt(m[1], 10)
+  m = s.match(/\blevel=(\d+)/);      if (m) out.level = parseInt(m[1], 10)
+  m = s.match(/effect=(\d+)/);        if (m) out.effect = parseInt(m[1], 10)
+  m = s.match(/supported=([0-9,]+)/)
+  if (m) {
+    var parts = m[1].split(",")
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === "") continue
+      var v = parseInt(parts[i], 10)
+      if (!isNaN(v)) out.supported.push(v)
+    }
+  }
+  return out
+}
+
+// The effect after this one, wrapping. Cycling is how the keyboard's own key
+// behaves, so the panel matches it.
+function nextEffect(current, supported, delta) {
+  var list = supported || []
+  if (list.length === 0) return current
+  var at = list.indexOf(current)
+  if (at === -1) return list[0]
+  var step = delta < 0 ? -1 : 1
+  return list[(at + step + list.length) % list.length]
+}
+
+// Names are not known yet: the value-to-effect mapping needs a human
+// watching the keyboard while each value is applied. Until that calibration
+// happens, label them honestly by index rather than guessing that 3 is
+// "Wave" and shipping a wrong label.
+var effectNames = {}
+
+function effectLabel(index) {
+  if (index === undefined || index === null || index < 0) return "\u2014"
+  return effectNames[index] !== undefined ? effectNames[index] : ("Effect " + index)
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseDevices: parseDevices,
@@ -188,6 +236,10 @@ if (typeof module !== "undefined" && module.exports) {
     toggleTarget: toggleTarget,
     planSetLevel: planSetLevel,
     planToggle: planToggle,
-    learnLevelMax: learnLevelMax
+    learnLevelMax: learnLevelMax,
+    parseEffectState: parseEffectState,
+    nextEffect: nextEffect,
+    effectLabel: effectLabel,
+    effectNames: effectNames
   }
 }

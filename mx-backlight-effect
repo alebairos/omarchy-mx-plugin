@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""Read and set the keyboard's backlight effect.
+
+Solaar's CLI exposes the backlight mode and level but not the effect, even
+though the device supports it and Solaar's own library already parses the
+field. This helper fills that one gap using `logitech_receiver` -- Solaar's
+backend, shipped by the same package this plugin already requires -- so the
+HID++ transport is Solaar's, not a reimplementation. It never opens
+/dev/hidraw itself. See specs/003-backlight-effects/spec.md.
+
+Usage:
+    mx-backlight-effect get           # prints "levels=8 level=3 effect=6 supported=0,1,2,3,4,5,6"
+    mx-backlight-effect set <effect>  # sets the effect, keeping level and delays
+
+Exits non-zero with a message on stderr if anything is unavailable, so the
+caller can hide the feature rather than showing a broken control.
+"""
+
+import struct
+import sys
+
+FEATURE_FN_GET_CONFIG = 0x00
+FEATURE_FN_SET_CONFIG = 0x10
+FEATURE_FN_GET_STATE = 0x20
+
+
+def fail(message, code=1):
+    print(message, file=sys.stderr)
+    sys.exit(code)
+
+
+def find_keyboard():
+    """First paired device exposing BACKLIGHT2, via Solaar's own library."""
+    try:
+        from logitech_receiver import base
+        from logitech_receiver import receiver as receiver_module
+        from logitech_receiver.hidpp20_constants import SupportedFeature
+    except ImportError as exc:
+        fail(f"logitech_receiver unavailable (is solaar installed?): {exc}", 2)
+
+    for device_info in base.receivers():
+        rcv = receiver_module.create_receiver(base, device_info, setting_callback=None)
+        if not rcv:
+            continue
+        for device in rcv:
+            if not device or not device.ping():
+                continue
+            if SupportedFeature.BACKLIGHT2 in device.features:
+                return device, SupportedFeature
+    fail("no paired device exposes BACKLIGHT2", 3)
+
+
+def read_state(device, feature):
+    # fn 0x00 carries the capability bitmap; fn 0x20 carries what is
+    # currently in effect. Both are needed: one says what the device can do,
+    # the other what it is doing.
+    config = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_CONFIG)
+    state = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_STATE)
+    if not config or not state:
+        fail("device did not answer the backlight query", 4)
+
+    enabled, options, supported, effects, level, dho, dhi, dpow = struct.unpack(
+        "<BBBHBHHH", config[:12]
+    )
+    return {
+        "enabled": enabled,
+        "options": options,
+        "effects_bitmap": effects,
+        "levels": state[0],
+        "level": state[1],
+        "effect": state[3],
+        "dho": dho,
+        "dhi": dhi,
+        "dpow": dpow,
+    }
+
+
+def supported_effects(bitmap):
+    return [bit for bit in range(16) if bitmap & (1 << bit)]
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ("get", "set"):
+        fail(__doc__.strip(), 64)
+
+    device, feature = find_keyboard()
+    state = read_state(device, feature)
+    available = supported_effects(state["effects_bitmap"])
+
+    if sys.argv[1] == "get":
+        print(
+            "levels={levels} level={level} effect={effect} supported={supported}".format(
+                levels=state["levels"],
+                level=state["level"],
+                effect=state["effect"],
+                supported=",".join(str(e) for e in available) or "none",
+            )
+        )
+        return
+
+    if len(sys.argv) < 3:
+        fail("set requires an effect index", 64)
+    try:
+        target = int(sys.argv[2])
+    except ValueError:
+        fail(f"not an effect index: {sys.argv[2]}", 64)
+    if target not in available:
+        fail(f"effect {target} not supported by this device (has {available})", 5)
+
+    # Same layout Solaar's own Backlight.write() uses. It hardcodes the third
+    # byte to 0xFF, documented in its source as "effect (FF-no change)"; the
+    # only difference here is passing a real effect index. Level and the three
+    # fade delays are carried through unchanged so setting an effect does not
+    # quietly alter anything else.
+    payload = struct.pack(
+        "<BBBBHHH",
+        state["enabled"],
+        state["options"],
+        target,
+        state["level"],
+        state["dho"],
+        state["dhi"],
+        state["dpow"],
+    )
+    if device.feature_request(feature.BACKLIGHT2, FEATURE_FN_SET_CONFIG, payload) is None:
+        fail(f"device rejected effect {target}", 6)
+    print(f"effect={target}")
+
+
+if __name__ == "__main__":
+    main()

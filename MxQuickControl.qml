@@ -59,6 +59,15 @@ Panel {
   // Level to restore when switching back on, remembered across an off.
   property int lastOnLevel: 0
 
+  // Backlight effect (Static / Wave / Breathing / ...). Solaar's CLI has no
+  // setting for this, so it goes through the bundled mx-backlight-effect
+  // helper, which uses Solaar's own logitech_receiver library rather than
+  // touching /dev/hidraw. See specs/003-backlight-effects/spec.md.
+  property int effectIndex: -1
+  property var effectsSupported: []
+  readonly property bool effectsAvailable: effectsSupported.length > 0
+  readonly property string effectHelper: String(Qt.resolvedUrl("mx-backlight-effect")).replace("file://", "")
+
   readonly property var otherDevices: {
     var list = []
     for (var i = 0; i < devices.length; i++) {
@@ -314,6 +323,7 @@ Panel {
         root.solaarAvailable = true
         root.devices = root.parseStatus(text)
         root.publishKeyboardState()
+        root.refreshEffect()
       }
     }
     onExited: function(exitCode) {
@@ -404,6 +414,33 @@ Panel {
   // against ~2.3s for a targeted `solaar config` read (measured). It is only
   // needed to discover devices and read battery, neither of which changes
   // quickly, so it runs on a slow timer instead of after every interaction.
+  Process {
+    id: effectGetProc
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        var st = Model.parseEffectState(text)
+        root.effectsSupported = st.supported
+        if (st.effect >= 0) root.effectIndex = st.effect
+      }
+    }
+    onExited: function(exitCode) {
+      // Any failure (no solaar library, no device, older keyboard) simply
+      // means no effect row -- the rest of the widget is unaffected.
+      if (exitCode !== 0) {
+        root.effectsSupported = []
+        root.effectIndex = -1
+      }
+    }
+  }
+
+  Process {
+    id: effectSetProc
+    onExited: function(exitCode) {
+      if (exitCode !== 0) Qt.callLater(root.refreshEffect)
+    }
+  }
+
   Timer {
     interval: 300000
     running: true
@@ -487,9 +524,18 @@ Panel {
   // built-in Power and Dropbox panels use.
   property bool cursorActive: false
   property int cursorIndex: 0
-  // Rows the cursor can visit: 0 = backlight toggle, 1 = brightness slider
-  // (only reachable while the backlight is on, since it is disabled when off).
-  readonly property int cursorRowCount: backlightOn ? 2 : 1
+  // Rows the cursor can visit, in display order. The brightness row is only
+  // reachable while the backlight is on (it is disabled when off), and the
+  // effect row only exists when the device reports effects, so the list is
+  // built rather than hardcoded.
+  readonly property var cursorRows: {
+    var rows = ["toggle"]
+    if (backlightOn) rows.push("level")
+    if (effectsAvailable) rows.push("effect")
+    return rows
+  }
+  readonly property int cursorRowCount: cursorRows.length
+  readonly property string cursorRow: cursorRows[Math.min(cursorIndex, cursorRows.length - 1)]
 
   function moveCursor(dx, dy) {
     var delta = dy !== 0 ? dy : dx
@@ -497,16 +543,50 @@ Panel {
   }
 
   function activateCursor() {
-    if (cursorIndex === 0) toggleBacklight()
+    if (cursorRow === "toggle") toggleBacklight()
+    else if (cursorRow === "effect") cycleEffect(1)
   }
 
   // Left/right on the slider row nudges brightness; on the toggle row the
   // horizontal keys just move the cursor like anywhere else.
   function adjustCursor(dx) {
-    if (cursorIndex !== 1 || !backlightOn) return false
-    var max = levelMaxByDevice[keyboardIndex] !== undefined ? levelMaxByDevice[keyboardIndex] : 7
-    setBrightness(Math.max(1, Math.min(max, backlightLevel + dx)))
-    return true
+    if (cursorRow === "level" && backlightOn) {
+      var max = levelMaxByDevice[keyboardIndex] !== undefined ? levelMaxByDevice[keyboardIndex] : 7
+      setBrightness(Math.max(1, Math.min(max, backlightLevel + dx)))
+      return true
+    }
+    if (cursorRow === "effect") {
+      cycleEffect(dx)
+      return true
+    }
+    return false
+  }
+
+  function cycleEffect(delta) {
+    if (!effectsAvailable) return
+    setEffect(Model.nextEffect(effectIndex, effectsSupported, delta))
+  }
+
+  function setEffect(index) {
+    if (!effectsAvailable || index === effectIndex) return
+    effectIndex = index                       // optimistic, like the level
+    showEffectOsd(index)
+    effectSetProc.command = [effectHelper, "set", String(index)]
+    effectSetProc.running = true
+  }
+
+  function refreshEffect() {
+    if (effectGetProc.running) return
+    effectGetProc.command = [effectHelper, "get"]
+    effectGetProc.running = true
+  }
+
+  function showEffectOsd(index) {
+    if (!bar || !bar.shell) return
+    bar.shell.summon("omarchy.osd", JSON.stringify({
+      icon: "keyboard",
+      message: "Backlight: " + Model.effectLabel(index)
+    }))
   }
 
   onOpenedChanged: {
@@ -520,6 +600,7 @@ Panel {
       // call (~2.3s) rather than the full enumeration (~10.5s): opening the
       // panel should not cost what a device scan costs.
       refreshBacklight()
+      refreshEffect()
     }
   }
 
@@ -574,7 +655,7 @@ Panel {
         description: root.keyboardBattery >= 0 ? "Battery " + root.keyboardBattery + "%" : ""
         checked: root.backlightOn
         foreground: root.bar.foreground
-        hasCursor: root.cursorActive && root.cursorIndex === 0
+        hasCursor: root.cursorActive && root.cursorRow === "toggle"
         onClicked: root.toggleBacklight()
         onHovered: function(h) { if (h) { root.cursorActive = true; root.cursorIndex = 0 } }
       }
@@ -617,7 +698,7 @@ Panel {
           integer: true
           value: root.backlightLevel > 0 ? root.backlightLevel : root.lastOnLevel
           onMoved: function(v) { root.setBrightness(Math.max(1, Math.round(v))) }
-          onDraggingChanged: if (dragging) { root.cursorActive = true; root.cursorIndex = 1 }
+          onDraggingChanged: if (dragging) { root.cursorActive = true; root.cursorIndex = root.cursorRows.indexOf("level") }
         }
 
         Text {
@@ -625,6 +706,74 @@ Panel {
           text: String(root.backlightLevel > 0 ? root.backlightLevel : root.lastOnLevel)
           color: root.bar.foreground
           font.family: root.bar.fontFamily
+          width: 24
+          horizontalAlignment: Text.AlignRight
+          anchors.verticalCenter: parent.verticalCenter
+        }
+      }
+
+      // Backlight effect. Values come from the device's own capability
+      // bitmap, so a keyboard advertising fewer effects gets fewer choices
+      // and one advertising none gets no row at all.
+      Row {
+        visible: root.effectsAvailable
+        width: parent.width
+        spacing: Style.space(10)
+
+        Text {
+          // mdi-auto-fix: the "effect" glyph, tinted like every other icon.
+          text: "\U000F0068"
+          color: root.bar.foreground
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.heading
+          anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Item {
+          width: parent.width - 70
+          height: effectLabel.implicitHeight + Style.space(10)
+          anchors.verticalCenter: parent.verticalCenter
+
+          Rectangle {
+            anchors.fill: parent
+            radius: Style.cornerRadius
+            color: (root.cursorActive && root.cursorRow === "effect") || effectMouse.containsMouse
+              ? Style.selectedFillFor(root.bar.foreground, Color.accent) : "transparent"
+            Behavior on color { ColorAnimation { duration: 100 } }
+          }
+
+          Text {
+            id: effectLabel
+            anchors.centerIn: parent
+            textFormat: Text.PlainText
+            text: Model.effectLabel(root.effectIndex)
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+          }
+
+          MouseArea {
+            id: effectMouse
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onEntered: { root.cursorActive = true; root.cursorIndex = root.cursorRows.indexOf("effect") }
+            // Left cycles forward, right cycles back -- the keyboard's own
+            // key only goes one way, so the panel offers the way back.
+            onClicked: function(mouse) {
+              root.cycleEffect(mouse.button === Qt.RightButton ? -1 : 1)
+            }
+          }
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          text: root.effectsSupported.length > 0
+            ? ((root.effectsSupported.indexOf(root.effectIndex) + 1) + "/" + root.effectsSupported.length)
+            : ""
+          color: Qt.darker(root.bar.foreground, 1.4)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
           width: 24
           horizontalAlignment: Text.AlignRight
           anchors.verticalCenter: parent.verticalCenter
