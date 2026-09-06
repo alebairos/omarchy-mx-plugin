@@ -32,10 +32,35 @@ Panel {
   // contracts/solaar-cli.md, "levelMax detection".
   property var levelMaxByDevice: ({})
 
-  // A reasonable default brightness when turning the backlight on from
-  // fully off (level 0) — otherwise "on" can land at level 0, which looks
-  // identical to off.
-  readonly property int defaultOnLevel: 4
+  // Per-instance settings, read from this widget's entry in
+  // ~/.config/omarchy/shell.json exactly as the first-party widgets do:
+  //
+  //   { "id": "alebairos.mx-quick-control",
+  //     "defaultOnLevel": 4, "refreshMinutes": 5, "showBattery": true }
+  //
+  // Each is clamped or defaulted here rather than trusted, since a hand-
+  // edited config is the one input this widget cannot validate in advance.
+
+  // Brightness used when switching on from fully off. Without it, "on" can
+  // land at level 0, which is indistinguishable from off.
+  readonly property int defaultOnLevel: {
+    var v = parseInt(setting("defaultOnLevel", 4), 10)
+    if (isNaN(v)) return 4
+    return Math.max(1, Math.min(7, v))
+  }
+
+  // How often to re-enumerate devices. This is the expensive `solaar show`
+  // (~10s), needed only for discovery and battery, so the floor is a minute
+  // -- anything less would keep the receiver permanently busy and starve the
+  // reads a user is actually waiting on.
+  readonly property int refreshMinutes: {
+    var v = parseInt(setting("refreshMinutes", 5), 10)
+    if (isNaN(v)) return 5
+    return Math.max(1, v)
+  }
+
+  // Whether to show battery percentages at all.
+  readonly property bool showBattery: setting("showBattery", true) !== false
 
   // Keyboard state lives in plain observable properties rather than being
   // read through `devices`. QML cannot observe field mutations on plain JS
@@ -496,7 +521,7 @@ Panel {
   }
 
   Timer {
-    interval: 300000
+    interval: root.refreshMinutes * 60000
     running: true
     repeat: true
     triggeredOnStart: true
@@ -575,7 +600,7 @@ Panel {
     active: root.backlightOn
     tooltipText: {
       if (root.unavailableReason !== "") return root.unavailableTitle
-      return root.keyboardName + (root.keyboardBattery >= 0 ? " · " + root.keyboardBattery + "%" : "")
+      return root.keyboardName + ((root.showBattery && root.keyboardBattery >= 0) ? " · " + root.keyboardBattery + "%" : "")
         + " · backlight " + (root.backlightOn ? root.backlightLevel : "off")
     }
     onPressed: function(b) {
@@ -723,7 +748,7 @@ Panel {
         visible: root.hasKeyboard
         width: parent.width
         label: "Backlight"
-        description: root.keyboardBattery >= 0 ? "Battery " + root.keyboardBattery + "%" : ""
+        description: (root.showBattery && root.keyboardBattery >= 0) ? "Battery " + root.keyboardBattery + "%" : ""
         checked: root.backlightOn
         foreground: root.bar.foreground
         hasCursor: root.cursorActive && root.cursorRow === "toggle"
@@ -852,12 +877,12 @@ Panel {
       }
 
       PanelSeparator {
-        visible: root.otherDevices.length > 0
+        visible: root.showBattery && root.otherDevices.length > 0
         foreground: root.bar.foreground
       }
 
       Repeater {
-        model: root.otherDevices
+        model: root.showBattery ? root.otherDevices : []
         delegate: Text {
           width: column.width
           textFormat: Text.PlainText
