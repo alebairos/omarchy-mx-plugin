@@ -51,7 +51,7 @@ def find_keyboard():
     fail("no paired device exposes BACKLIGHT2", 3)
 
 
-def read_state(device, feature, attempts=4):
+def read_state(device, feature, attempts=9, backoff=1.5):
     # fn 0x00 carries the capability bitmap; fn 0x20 carries what is
     # currently in effect. Both are needed: one says what the device can do,
     # the other what it is doing.
@@ -64,13 +64,19 @@ def read_state(device, feature, attempts=4):
     # which would hide the control instead of retrying. A device that
     # advertises BACKLIGHT2 always has at least one level, so levels == 0 is
     # the tell.
+    #
+    # The retry budget is sized against the real contention window rather
+    # than guessed: a full `solaar show` -- which the widget runs on its own
+    # timer -- occupies the device for about 10.5 seconds (measured). A
+    # shorter budget gives up while that is still in flight, which is exactly
+    # how this failed the first time.
     for attempt in range(attempts):
         config = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_CONFIG)
         state = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_STATE)
         if config and state and state[0] > 0:
             break
         if attempt < attempts - 1:
-            time.sleep(0.4)
+            time.sleep(backoff)
     else:
         fail("device kept answering with an empty backlight state", 4)
 
@@ -132,12 +138,21 @@ def main():
     # only difference here is passing a real effect index. Level and the three
     # fade delays are carried through unchanged so setting an effect does not
     # quietly alter anything else.
+    # `enabled` is forced on rather than carried through. Effect 1 on this
+    # keyboard is an "off" effect: selecting it clears the device's enabled
+    # flag and zeroes the level. Preserving the current value then wrote
+    # enabled=0 forever after, so once the light went off no effect could
+    # bring it back -- the helper could strand the keyboard dark. Choosing an
+    # effect is a request to light the keyboard, so it says so.
+    level = state["level"]
+    if level == 0:
+        level = 1  # a lit effect at level 0 is invisible; give it something to show
     payload = struct.pack(
         "<BBBBHHH",
-        state["enabled"],
+        1,
         state["options"],
         target,
-        state["level"],
+        level,
         state["dho"],
         state["dhi"],
         state["dpow"],

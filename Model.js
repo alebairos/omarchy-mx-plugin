@@ -219,14 +219,42 @@ function nextEffect(current, supported, delta) {
 // identified stays an honest "Effect N" rather than a guess -- a wrong
 // label is worse than no label, because it looks authoritative.
 //
-// Logitech documents six effects for this keyboard (Static, Contrast,
-// Breathing, Wave, Reaction, Random) while the device advertises seven
-// values, so one is expected to be a duplicate or unused.
+// Fully calibrated on an MX Mechanical Mini: all six effects Logitech
+// documents (Static, Contrast, Breathing, Wave, Reaction, Random) are
+// accounted for, and the seventh value the device advertises turned out to
+// be "off" rather than a duplicate -- which is why it is excluded above.
+// Effects the panel deliberately does not offer. Effect 1 on the MX
+// Mechanical Mini is an "off" effect: selecting it clears the device's
+// enabled flag and forces the level to 0. The panel already has an on/off
+// toggle, so leaving it in the cycle would give two controls for one state
+// and let an ordinary effect change silently switch the backlight off --
+// the same dead end the brightness slider had when its range started at 0.
+var excludedEffects = [1]
+
+function selectableEffects(supported) {
+  var out = []
+  var list = supported || []
+  for (var i = 0; i < list.length; i++) {
+    if (excludedEffects.indexOf(list[i]) === -1) out.push(list[i])
+  }
+  return out
+}
+
 var effectNames = {
+  // 0: every key steadily lit, no animation.
+  0: "Static",
+  // 1: not offered in the panel -- it turns the backlight off entirely.
+  1: "Off",
+  // 2: every key pulses smoothly in and out.
+  2: "Breathing",
   // 3: modifiers (tab, caps, shift) lit dimmer than the letters and numbers.
   3: "Contrast",
+  // 4: only the keys being pressed light up.
+  4: "Reaction",
   // 5: keys light at random. Confirmed twice, independently.
-  5: "Random"
+  5: "Random",
+  // 6: a column of light sweeps across the keyboard.
+  6: "Wave"
 }
 
 function effectLabel(index) {
@@ -247,6 +275,8 @@ if (typeof module !== "undefined" && module.exports) {
     planToggle: planToggle,
     learnLevelMax: learnLevelMax,
     parseEffectState: parseEffectState,
+    selectableEffects: selectableEffects,
+    excludedEffects: excludedEffects,
     nextEffect: nextEffect,
     effectLabel: effectLabel,
     effectNames: effectNames

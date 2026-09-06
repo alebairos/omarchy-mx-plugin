@@ -65,7 +65,10 @@ Panel {
   // touching /dev/hidraw. See specs/003-backlight-effects/spec.md.
   property int effectIndex: -1
   property var effectsSupported: []
-  readonly property bool effectsAvailable: effectsSupported.length > 0
+  // What the panel actually offers: the device's supported set minus the
+  // "off" effect, which the backlight toggle already owns (see Model.js).
+  readonly property var effectsSelectable: Model.selectableEffects(effectsSupported)
+  readonly property bool effectsAvailable: effectsSelectable.length > 0
   readonly property string effectHelper: String(Qt.resolvedUrl("mx-backlight-effect")).replace("file://", "")
 
   readonly property var otherDevices: {
@@ -564,7 +567,7 @@ Panel {
 
   function cycleEffect(delta) {
     if (!effectsAvailable) return
-    setEffect(Model.nextEffect(effectIndex, effectsSupported, delta))
+    setEffect(Model.nextEffect(effectIndex, effectsSelectable, delta))
   }
 
   function setEffect(index) {
@@ -768,8 +771,8 @@ Panel {
 
         Text {
           textFormat: Text.PlainText
-          text: root.effectsSupported.length > 0
-            ? ((root.effectsSupported.indexOf(root.effectIndex) + 1) + "/" + root.effectsSupported.length)
+          text: root.effectsSelectable.length > 0
+            ? ((root.effectsSelectable.indexOf(root.effectIndex) + 1) + "/" + root.effectsSelectable.length)
             : ""
           color: Qt.darker(root.bar.foreground, 1.4)
           font.family: root.bar.fontFamily
