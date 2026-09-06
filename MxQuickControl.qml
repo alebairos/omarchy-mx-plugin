@@ -123,7 +123,13 @@ Panel {
   // `solaar show` was running), so a background refresh must never race a
   // user action. Writes take priority; a refresh that would collide is
   // dropped, since the next timer tick re-reads state anyway.
-  readonly property bool solaarBusy: statusProc.running || modeProc.running || levelProc.running || verifyProc.running
+  // Every one of these talks to the same receiver, so they must all count as
+  // busy. The effect helper was missing from this list, which let it run
+  // concurrently with a solaar CLI call -- both then got degraded answers,
+  // and the panel's re-read on open was dropped entirely.
+  readonly property bool solaarBusy: statusProc.running || modeProc.running
+    || levelProc.running || verifyProc.running
+    || effectGetProc.running || effectSetProc.running
 
   function refresh() {
     if (solaarBusy) return
@@ -251,22 +257,31 @@ Panel {
   // when the panel opens, and after a write that failed.
   property var verifyQueue: []
 
+  // One queue drives every read, executed strictly one at a time. Running
+  // them concurrently is what made the device answer with zeros.
   function refreshBacklight() {
     if (!hasKeyboard) return
-    verifyQueue = ["backlight", "backlight_level"]
+    verifyQueue = ["backlight", "backlight_level", "effect"]
     runNextVerify()
   }
 
   function runNextVerify() {
     if (verifyQueue.length === 0) return
     if (solaarBusy) {
-      // A write in flight will publish a newer value than this read would,
-      // so drop the read rather than queue behind it and overwrite.
-      verifyQueue = []
+      // Wait for the device rather than giving up. Dropping the queue here
+      // is why opening the panel could silently fail to refresh: any call
+      // still in flight at that moment discarded the whole re-read, leaving
+      // a level on screen that the keyboard had long since moved past.
+      Qt.callLater(runNextVerify)
       return
     }
     var next = verifyQueue[0]
     verifyQueue = verifyQueue.slice(1)
+    if (next === "effect") {
+      effectGetProc.command = [effectHelper, "get"]
+      effectGetProc.running = true
+      return
+    }
     verifyProc.command = ["solaar", "config", String(keyboardIndex), next]
     verifyProc.running = true
   }
@@ -434,6 +449,7 @@ Panel {
         root.effectsSupported = []
         root.effectIndex = -1
       }
+      Qt.callLater(root.runNextVerify)
     }
   }
 
@@ -579,9 +595,9 @@ Panel {
   }
 
   function refreshEffect() {
-    if (effectGetProc.running) return
-    effectGetProc.command = [effectHelper, "get"]
-    effectGetProc.running = true
+    if (!hasKeyboard) return
+    if (verifyQueue.indexOf("effect") === -1) verifyQueue = verifyQueue.concat(["effect"])
+    runNextVerify()
   }
 
   function showEffectOsd(index) {
@@ -602,8 +618,7 @@ Panel {
       // up to five minutes stale. Re-read on open, but with the targeted
       // call (~2.3s) rather than the full enumeration (~10.5s): opening the
       // panel should not cost what a device scan costs.
-      refreshBacklight()
-      refreshEffect()
+      refreshBacklight()   // includes the effect read; see runNextVerify
     }
   }
 
