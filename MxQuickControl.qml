@@ -440,6 +440,16 @@ Panel {
         var st = Model.parseEffectState(text)
         root.effectsSupported = st.supported
         if (st.effect >= 0) root.effectIndex = st.effect
+        // The device reports how many levels it has, so the slider's
+        // maximum is read rather than assumed. It used to default to 7 and
+        // only get corrected when a write was rejected as out of range,
+        // which meant a keyboard with fewer levels offered one too many
+        // until the user found the edge by hitting it.
+        if (st.levels > 1) {
+          var m = root.levelMaxByDevice
+          m[root.keyboardIndex] = st.levels - 1
+          root.levelMaxByDevice = m
+        }
       }
     }
     onExited: function(exitCode) {

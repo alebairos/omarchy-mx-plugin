@@ -226,3 +226,16 @@ test("effect labels use known names and stay honest otherwise", () => {
 test("cycling an empty set is a no-op rather than an error", () => {
   assert.equal(M.nextEffect(3, [], 1), 3)
 })
+
+test("the device's level count is read, not assumed", () => {
+  // levels=8 means levels 0..7, so the slider maximum is 7. Reading this
+  // replaced a hardcoded 7 that was only corrected after a write failed.
+  const st = M.parseEffectState("levels=8 level=3 effect=0 supported=0,2,3")
+  assert.equal(st.levels, 8)
+  assert.equal(st.levels - 1, 7)
+
+  // A keyboard with a smaller range must not be offered levels it lacks.
+  const small = M.parseEffectState("levels=4 level=1 effect=0 supported=0")
+  assert.equal(small.levels - 1, 3)
+  assert.equal(M.clampLevel(7, small.levels - 1), 3)
+})

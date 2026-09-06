@@ -140,18 +140,21 @@ hardware. Reports welcome:
 - **Roughly 2–3 seconds per action.** Each `solaar` invocation costs about
   2.3s on the reference hardware, and the plugin shells out rather than
   linking against the library, so a toggle or a brightness change takes
-  about that long to reach the keyboard. The UI updates immediately.
-- **Changes made elsewhere take up to 5 minutes to appear.** If you adjust
-  the backlight in the Solaar window or with the keyboard's own Fn keys, the
-  widget catches up on its next refresh. A targeted refresh when the panel
-  opens is planned.
-- **If Solaar is not installed, the widget hides itself** rather than
-  explaining why. That is deliberate (it must never break the bar) but
-  unhelpful; an explicit message is planned.
-- Exposes backlight and battery only. Everything else Solaar can do —
-  `fn-swap`, host switching, key remapping, mouse DPI — is one middle-click
-  away in Solaar itself, by design. See
-  [`specs/constitution.md`](specs/constitution.md).
+  about that long to reach the keyboard. The panel updates immediately; the
+  keyboard follows.
+- **The panel does not update live while it is open.** It re-reads the
+  device when you open it, so what you see on opening is current. But if you
+  change the brightness with F4/F5 *while the panel is already open*, the
+  displayed value will not follow until you reopen it. The device does
+  announce those changes, but acting on them needs a process listening
+  continuously, which this plugin deliberately does not run.
+- **Effects are only exposed for keyboards that report them.** The list
+  comes from the device's own capability bitmap, so a keyboard that
+  advertises no effects simply gets no effect row.
+- **The brightness slider assumes eight levels until told otherwise.** The
+  device reports its real number of levels, but the maximum used for
+  clamping is only corrected once a write is rejected as out of range. On a
+  keyboard with fewer levels the slider may briefly offer one too many.
 
 ## How it works
 

@@ -156,7 +156,7 @@ the widget if the bar is rearranged.
 - [x] T013 [US3] Targeted read (`solaar config <n> backlight`, ~2.3s) when the panel opens, so state is current without paying the 10.5s enumeration
 - [ ] T014 [US3] Expose per-instance settings via `setting()` from `shell.json`: default on-level, refresh interval, and whether to show the battery line
 - [x] T015 [US3] Replace the silent hide when `solaar` is missing with an explicit panel state naming the install command
-- [ ] T016 Probe the device's real maximum backlight level rather than assuming 7 until a write is rejected — or, if no clean probe exists, document the assumption as a known limitation
+- [x] T016 Probe the device's real maximum backlight level rather than assuming 7 until a write is rejected. No probe needed in the end: BACKLIGHT2 fn 0x20 reports the level *count* directly, and the effect helper already reads it, so the slider maximum is now `levels - 1` from the device instead of a constant corrected by failure.
 
 - [ ] T027 [US3] Document, or fix, that `omarchy plugin remove` also drops the widget's bar-layout entry, so a reinstall needs `omarchy plugin enable` again (found by reinstalling from GitHub; now stated in the README)
 
