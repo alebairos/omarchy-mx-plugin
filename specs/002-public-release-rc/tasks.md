@@ -158,7 +158,7 @@ the widget if the bar is rearranged.
 - [x] T015 [US3] Replace the silent hide when `solaar` is missing with an explicit panel state naming the install command
 - [x] T016 Probe the device's real maximum backlight level rather than assuming 7 until a write is rejected. No probe needed in the end: BACKLIGHT2 fn 0x20 reports the level *count* directly, and the effect helper already reads it, so the slider maximum is now `levels - 1` from the device instead of a constant corrected by failure.
 
-- [ ] T027 [US3] Document, or fix, that `omarchy plugin remove` also drops the widget's bar-layout entry, so a reinstall needs `omarchy plugin enable` again (found by reinstalling from GitHub; now stated in the README)
+- [x] T027 [US3] Document, or fix, that `omarchy plugin remove` also drops the widget's bar-layout entry, so a reinstall needs `omarchy plugin enable` again. Documented rather than fixed: it is Omarchy's behaviour, not this plugin's, and the README's Removing section now says so outright.
 
 **Checkpoint**: The widget tells the truth about the device and about itself, and can be tuned like any other widget.
 
@@ -238,10 +238,12 @@ exposes it in one more row for free.
       what the undecoded bytes mean (`08` at byte 4, `05` at byte 6, and the
       longer enumeration frame). Reading proves the device talks; it does
       not prove it listens.
-- [ ] T037 **Map effect values to effect names.** Six values observed
-      (`00, 02, 03, 04, 05, 06`; `01` never appeared). Which is Wave, which
-      is Breathing, and so on, needs a human watching the keyboard and the
-      capture together.
+- [x] T037 **Map effect values to effect names.** Done, by applying each
+      value and having a human report what the keyboard did: 0 Static,
+      1 Off (excluded from the panel), 2 Breathing, 3 Contrast, 4 Reaction,
+      5 Random, 6 Wave. That also resolved the seven-values-for-six-effects
+      puzzle: the seventh is "off", not a duplicate. Method written up in
+      [`specs/research/hitl-calibration.md`](../research/hitl-calibration.md).
 - [ ] T038 **Take it upstream to Solaar.** With the capture in hand this is
       now an evidenced feature request — "BACKLIGHT2 notifications carry an
       effect index, please expose it as a setting" — not a guess. If Solaar
