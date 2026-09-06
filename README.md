@@ -146,12 +146,17 @@ hardware. Reports welcome:
   linking against the library, so a toggle or a brightness change takes
   about that long to reach the keyboard. The panel updates immediately; the
   keyboard follows.
-- **The panel does not update live while it is open.** It re-reads the
-  device when you open it, so what you see on opening is current. But if you
-  change the brightness with F4/F5 *while the panel is already open*, the
-  displayed value will not follow until you reopen it. The device does
-  announce those changes, but acting on them needs a process listening
-  continuously, which this plugin deliberately does not run.
+- **The panel does not follow the keyboard's own keys, unless you opt in.**
+  It re-reads the device when you open it, so what you see on opening is
+  always current. But changing brightness with F4/F5, or the effect with the
+  lamp key, will not move the panel while it is already open.
+
+  The device *does* announce those changes over HID++; hearing them needs a
+  process listening continuously, which this plugin deliberately is not. If
+  you already run Solaar, [`solaar-rule.yaml`](solaar-rule.yaml) delegates
+  the listening to it: append it to `~/.config/solaar/rules.yaml`, restart
+  Solaar, and the panel follows the hardware keys and shows an on-screen
+  display for them. Nothing breaks without it.
 - **Effects are only exposed for keyboards that report them.** The list
   comes from the device's own capability bitmap, so a keyboard that
   advertises no effects simply gets no effect row.
