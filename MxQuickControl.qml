@@ -272,10 +272,14 @@ Panel {
   }
 
   function runNextVerify() {
-    if (verifyQueue.length === 0) {
-      announceExternalChange = false
-      return
-    }
+    // Deliberately does NOT clear announceExternalChange here. A Process's
+    // onExited and its StdioCollector's onStreamFinished fire in no
+    // guaranteed order, so clearing when the queue empties raced the last
+    // read's own handler -- the effect read, being last, lost that race and
+    // its OSD never appeared while the level's (never last) always did.
+    // The flag is cleared where a read is known NOT to be announcing:
+    // opening the panel.
+    if (verifyQueue.length === 0) return
     if (solaarBusy) {
       // Wait for the device rather than giving up. Dropping the queue here
       // is why opening the panel could silently fail to refresh: any call
@@ -541,6 +545,7 @@ Panel {
       if (!root.hasKeyboard) return "no backlight-capable device (devices=" + root.devices.length + ")"
       return root.keyboardName + " mode=" + root.backlightMode
         + " level=" + root.backlightLevel
+        + " effect=" + root.effectIndex
         + " busy=" + root.solaarBusy
     }
   }
@@ -645,6 +650,9 @@ Panel {
     if (opened) {
       cursorActive = false
       cursorIndex = 0
+      // A refresh the user asked for by opening the panel is not an
+      // external change, so it must not pop an OSD.
+      announceExternalChange = false
       // The backlight can be changed outside this widget -- in Solaar's own
       // window, or with the keyboard's Fn keys -- and the full `solaar show`
       // refresh only runs every 300s, so the panel could open showing state
