@@ -78,6 +78,19 @@ have slept through a real regression.
 When adding a test for a fix, mutate the fix and confirm the new test
 fails. Say in the commit message that you did.
 
+## Calibrating things only a human can see
+
+Some facts are only obtainable by someone looking at the hardware: what the
+LEDs are doing, whether an interaction feels right, whether a glyph renders.
+There is a method for that, learned by doing it badly first — see
+[`specs/research/hitl-calibration.md`](specs/research/hitl-calibration.md).
+
+The short version: make it drivable from one command before asking anyone to
+look, change one thing per trial, leave the state applied so the answer can
+arrive whenever they are next at the keyboard rather than inside a timed
+window, label honestly until confirmed, and write each answer straight into
+the code with the observation as the comment.
+
 ## Reporting
 
 Report what was verified and how, and state plainly what was not. "Tests
