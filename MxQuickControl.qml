@@ -453,9 +453,17 @@ Panel {
         var st = Model.parseEffectState(text)
         root.effectsSupported = st.supported
         if (st.effect >= 0) {
-          var changed = st.effect !== root.effectIndex
+          var effectMoved = st.effect !== root.effectIndex
           root.effectIndex = st.effect
-          if (changed && root.announceExternalChange) root.showEffectOsd(st.effect)
+          if (effectMoved && root.announceExternalChange) root.showEffectOsd(st.effect)
+        }
+        // This one read reports the level as well, so a change made with the
+        // keyboard's own keys is picked up here without a second call.
+        if (st.levels > 1 && st.level !== root.backlightLevel) {
+          var levelMoved = true
+          root.backlightLevel = st.level
+          if (st.level > 0) root.lastOnLevel = st.level
+          if (levelMoved && root.announceExternalChange) root.showBacklightOsd(st.level)
         }
         // The device reports how many levels it has, so the slider's
         // maximum is read rather than assumed. It used to default to 7 and
@@ -538,7 +546,11 @@ Panel {
     // listening -- this plugin runs no daemon of its own.
     function deviceChanged(): void {
       root.announceExternalChange = true
-      root.refreshBacklight()
+      // Only the effect read is needed: it reports level and effect in a
+      // single ~2s call. Running the full pipeline here meant waiting on two
+      // further reads (~5s more) before the OSD could appear, which was long
+      // enough to feel disconnected from the key press that caused it.
+      root.refreshEffect()
     }
     function level(value: string): void { root.setBrightness(parseInt(value, 10)) }
     function status(): string {
