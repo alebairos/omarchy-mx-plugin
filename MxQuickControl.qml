@@ -170,16 +170,28 @@ Panel {
   // Copy the freshly parsed keyboard row into the observable properties the
   // UI binds to. Anything not backlight-capable stays in `devices` and is
   // rendered straight from there (read-only, so plain objects are fine).
+  property int keyboardMisses: 0
+
   function publishKeyboardState() {
     for (var i = 0; i < devices.length; i++) {
       var d = devices[i]
       if (!d.hasBacklight) continue
+      keyboardMisses = 0
       keyboardIndex = d.deviceIndex
       keyboardName = d.name
       backlightMode = d.backlightMode !== null ? d.backlightMode : ""
       backlightLevel = d.backlightLevel !== null ? d.backlightLevel : 0
       keyboardBattery = d.batteryPercent !== null ? d.batteryPercent : -1
       if (backlightLevel > 0) lastOnLevel = backlightLevel
+      return
+    }
+    // No backlight device in this read. That is usually contention rather
+    // than a keyboard that left, so do not tear down working state on the
+    // strength of one answer -- re-read instead, and keep showing what was
+    // last known good meanwhile.
+    keyboardMisses++
+    if (!Model.shouldTrustKeyboardLoss(keyboardIndex >= 0, keyboardMisses)) {
+      keyboardRecheck.restart()
       return
     }
     keyboardIndex = -1
@@ -518,6 +530,16 @@ Panel {
     onExited: function(exitCode) {
       if (exitCode !== 0) Qt.callLater(root.refreshEffect)
     }
+  }
+
+  // Re-read soon after a suspected degraded enumeration, rather than waiting
+  // for the next scheduled refresh -- which is minutes away and would leave
+  // the widget claiming there is no keyboard the whole time.
+  Timer {
+    id: keyboardRecheck
+    interval: 8000
+    repeat: false
+    onTriggered: root.refresh()
   }
 
   Timer {
