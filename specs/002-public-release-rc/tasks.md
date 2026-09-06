@@ -223,22 +223,31 @@ a library that already works. The legitimate route is upstream: Solaar (or
 `python-logitech-receiver`) gains effect support, and this plugin then
 exposes it in one more row for free.
 
-- [ ] T032 **Investigate whether the effects are reachable at all.**
-      **Note added after T035:** the evidence below came entirely from
-      diffing `solaar show` output. The HID++ *notification stream* was never
-      examined, and it demonstrably carries backlight level changes that
-      `solaar show` polling does not surface until re-read. So "not visible
-      in `solaar show`" is weaker evidence than it looked: the effects may
-      well be announced in a notification nobody has watched for. Repeat the
-      hidraw capture from T035 while cycling the effects before concluding
-      anything. Check
-      whether Logi Options+ on Windows changes anything observable over
-      HID++ (a USB capture would settle it), whether the pwr-Solaar project
-      has an open issue or a feature page for MX Mechanical effects, and
-      whether the effect is stored in a writable register or is purely a
-      firmware-side cycle with no host representation. Outcome is either an
-      upstream contribution or a documented "not possible", not a
-      workaround here.
+- [x] T032 **Investigate whether the effects are reachable at all.**
+      **Answered: yes, for reading.** The device broadcasts the effect index
+      in BACKLIGHT2 notifications — byte 7 of `11 01 0b 00 08 <level> 05
+      <effect>`, which cycles through six distinct values while the level
+      byte stays put. Full capture and analysis in
+      [`specs/research/backlight-effects-hidpp.md`](../research/backlight-effects-hidpp.md).
+      The earlier "firmware-local and invisible" conclusion was wrong; it
+      came from diffing `solaar show`, which polls what Solaar models rather
+      than watching what the hardware says.
+- [ ] T036 **Decode the BACKLIGHT2 frame against the HID++ 2.0 `0x1982`
+      spec** rather than inferring field positions from which byte moves.
+      Confirm whether the feature exposes a *setter* for the effect, and
+      what the undecoded bytes mean (`08` at byte 4, `05` at byte 6, and the
+      longer enumeration frame). Reading proves the device talks; it does
+      not prove it listens.
+- [ ] T037 **Map effect values to effect names.** Six values observed
+      (`00, 02, 03, 04, 05, 06`; `01` never appeared). Which is Wave, which
+      is Breathing, and so on, needs a human watching the keyboard and the
+      capture together.
+- [ ] T038 **Take it upstream to Solaar.** With the capture in hand this is
+      now an evidenced feature request — "BACKLIGHT2 notifications carry an
+      effect index, please expose it as a setting" — not a guess. If Solaar
+      gains `backlight_effect`, this plugin gets the third panel row through
+      the CLI it already uses, with no Principle II problem. Check for an
+      existing issue first.
 - [ ] T033 **Separately: capturing the key press.** `divert-keys` can set
       `Backlight Down` / `Backlight Up` to `Diverted`, which makes the
       keyboard send HID++ notifications instead of acting natively — this
