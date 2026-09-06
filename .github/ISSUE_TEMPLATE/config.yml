@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Solaar (the library this plugin drives)
+    url: https://github.com/pwr-Solaar/Solaar/issues
+    about: Device support, pairing, and anything this plugin only passes through.

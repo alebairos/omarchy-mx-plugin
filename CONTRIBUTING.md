@@ -10,12 +10,36 @@ part of Omarchy, and can you show it works on real hardware.
 into `~/.config/omarchy/plugins/`. That has two consequences:
 
 1. **`main` is the distribution channel**, not just an integration branch.
-   A broken `main` is a broken install for every new user immediately.
-   Never merge red. Work on a branch, let CI go green, then merge and tag.
+   A broken `main` is a broken install for every new user immediately, with
+   no release step in between to catch it.
 2. **Everything in the repository ships to users' machines.** Plugins run
    unsandboxed and Omarchy tells users to review the code before enabling
    it, so keep the repository free of anything that is not the plugin, its
    tests, or the reasoning behind it.
+
+`main` is therefore protected: no direct pushes (including by the
+maintainer), both CI checks must pass, branches must be up to date before
+merging, and history stays linear. Everything goes through a pull request.
+
+## You do not need the hardware to contribute
+
+A fair amount of this repository can be worked on with no Logitech device at
+all, and those contributions are welcome:
+
+- **Anything in `Model.js`** — the parser and the state logic. It is plain
+  JavaScript with no QML or device dependency, and it is where most of the
+  historical bugs lived.
+- **The test suite.** `npm test` needs only node. The functional tests run
+  against `tests/fake-solaar`, a stand-in that emulates the device's real
+  quirks, so command sequences can be exercised without a keyboard.
+- **Docs, CI, packaging.**
+
+What genuinely needs a device: QML rendering, anything touching
+`mx-backlight-effect`, and any claim that the lighting behaves a certain
+way. If you cannot check something, **say so in the pull request**. An
+honest "untested, I have no such device" is useful; a confident claim that
+turns out to be untested wastes everyone's time and is how this project
+shipped several of its worst bugs.
 
 ## Setup
 
@@ -113,6 +137,24 @@ only caught by mutation testing.
 
 ## Pull requests
 
-Describe what you changed and how you verified it on hardware. If you found
-a device behaviour that is not obvious from the code, put it in the commit
-message — that is the part nobody can reconstruct later.
+Branch, push, open a PR. The template asks what you verified and on what
+hardware; please fill it in honestly, including the "no device to hand" box
+where that applies.
+
+CI runs on every pull request, including from forks. Both checks must pass
+and the branch must be current with `main` before it can merge.
+
+If you discovered something about how the device or Solaar behaves, put it
+in the commit message **and** in a code comment. That knowledge cannot be
+reconstructed from a diff, and it is the most valuable thing in this
+repository — several comments here exist purely because the behaviour they
+describe looks like a bug and would otherwise be "cleaned up".
+
+## A standing hazard: the device answers concurrent access with garbage
+
+Three separate bugs here came from the same root. Every caller that touches
+the receiver — the `solaar` CLI, the effect helper, anything new — must join
+the single-flight queue in `MxQuickControl.qml`. Concurrent access does not
+produce an error; it produces a frame of zeros that looks like a valid
+answer meaning "this keyboard has nothing". If you add a device call, add it
+to `solaarBusy` and route it through `runNextVerify`.
