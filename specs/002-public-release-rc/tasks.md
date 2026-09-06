@@ -53,7 +53,21 @@ determines acceptance, so it outranks packaging polish.
 - [x] T007 [US2] Add `PanelKeyCatcher` to the panel with `focusTarget`: arrow keys move a cursor across the toggle and slider, Enter activates, Esc closes *(verified at the keyboard — see T028)*
 - [x] T008 [US2] Wire `onTabRequested` to `switchPanel(direction)` so this panel joins the Tab chain between adjacent panels *(verified at the keyboard — see T028)*
 - [x] T009 [US2] Give the toggle and slider `hasCursor` bindings driven by the panel cursor, matching the highlight behaviour of first-party controls *(verified at the keyboard — see T028)*
-- [ ] T010 [US2] Handle `bar.vertical` deliberately in both the bar button and the panel layout (the fixed-width slider row currently assumes horizontal)
+- [x] T010 [US2] Handle `bar.vertical` in the bar button and the panel
+      layout. **Verified working on a right-side vertical bar** (2026-09-06),
+      and no code change was needed -- which is the interesting part. The
+      plugin has no `bar.vertical` branch at all; it works because
+      `Ui/KeyboardPanel` reads `bar.position` itself and computes placement
+      and available space per orientation, `BarIconButton` handles its own
+      orientation, and this panel sizes with `fittedContentWidth()` and
+      `width: parent.width` rather than fixed geometry. Vertical support came
+      free from using Omarchy's own components instead of hand-rolling
+      layout, which is what constitution Principle III is for.
+
+      Two things remain untested rather than fixed: a **left**-side bar (only
+      right was tried), and the slider row's `parent.width - 70`, a hardcoded
+      reserve for the icon and readout that would squeeze the slider on a
+      much narrower panel. Neither is worth pre-emptive work.
 - [x] T011 [US2] Middle-click on the bar icon launches Solaar, as the escape hatch to every setting this widget deliberately does not expose
 - [x] T012 [US2] Emit the standard Omarchy OSD on backlight level change, as volume and screen brightness already do *(payload contract verified; on-screen appearance needs a human — see T034)*
 
