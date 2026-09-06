@@ -5,7 +5,7 @@ battery status at a glance, and your keyboard's backlight controlled from
 the bar instead of from [Solaar](https://pwr-Solaar.github.io/Solaar/)'s
 window.
 
-> **Status: release candidate** (`1.0.0-rc.4`). It works and is used daily
+> **Status: release candidate** (`1.0.0-rc.5`). It works and is used daily
 > on the author's machine, but see [Supported devices](#supported-devices)
 > for exactly what has been tested versus what is expected to work, and
 > [Known limitations](#known-limitations) for what it does not do yet.

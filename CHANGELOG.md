@@ -17,6 +17,47 @@ settings from `shell.json`, an explicit "Solaar not installed" state, and a
 README rewrite that separates verified hardware from hardware merely
 expected to work.
 
+## [1.0.0-rc.5] — 2026-09-06
+
+Closes the last of the README's known limitations: the panel can now follow
+the keyboard's own backlight keys.
+
+### Added
+
+- **Optional live sync with the keyboard's own keys.**
+  [`solaar-rule.yaml`](solaar-rule.yaml) is an opt-in Solaar rule that calls
+  the widget when the device reports a backlight change, so pressing F4/F5
+  or the effect key moves the panel and pops an on-screen display, in about
+  two seconds.
+
+  The device has always announced these changes over HID++; hearing them
+  needs a process listening continuously, and this plugin deliberately is
+  not one (constitution Principle V). Solaar already is such a process for
+  anyone who runs it, and its rules engine exists to react to exactly these
+  notifications — so the listening is delegated rather than duplicated.
+  Without Solaar running nothing breaks: the panel catches up on open, as
+  before.
+- `status` over IPC now reports the current effect, so this class of problem
+  can be diagnosed from a terminal instead of by watching the screen.
+
+### Fixed
+
+- **The effect OSD never appeared** while the brightness one always did.
+  A `Process`'s `onExited` and its `StdioCollector`'s `onStreamFinished`
+  fire in no guaranteed order, and the queue driver cleared its "announce"
+  flag when the queue emptied — so whichever read ran *last* could lose the
+  race with itself. The effect read is last; the level read never is.
+- **The hardware-key OSD lagged about five seconds.** An external change ran
+  three reads (~7s) when the effect helper's single call already reports
+  level and effect together (~2s).
+
+### Verified
+
+- **Vertical bars.** Confirmed working on a right-side bar, with no code
+  change required: placement comes from `Ui/KeyboardPanel` reading
+  `bar.position`, and the panel sizes itself rather than assuming geometry.
+  Left-side bars remain untested.
+
 ## [1.0.0-rc.4] — 2026-09-06
 
 Adds lighting-effect control, and a good deal of hardening found by using it.
@@ -203,7 +244,8 @@ verification, and are the reason the test suite in `rc.2` exists.
 - Plugin id namespaced to the publisher; `omarchy.*` is reserved for
   first-party plugins and installation is refused outright.
 
-[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.4...HEAD
+[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.5...HEAD
+[1.0.0-rc.5]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.4...v1.0.0-rc.5
 [1.0.0-rc.4]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.1...v1.0.0-rc.2
