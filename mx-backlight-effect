@@ -18,6 +18,7 @@ caller can hide the feature rather than showing a broken control.
 
 import struct
 import sys
+import time
 
 FEATURE_FN_GET_CONFIG = 0x00
 FEATURE_FN_SET_CONFIG = 0x10
@@ -50,14 +51,28 @@ def find_keyboard():
     fail("no paired device exposes BACKLIGHT2", 3)
 
 
-def read_state(device, feature):
+def read_state(device, feature, attempts=4):
     # fn 0x00 carries the capability bitmap; fn 0x20 carries what is
     # currently in effect. Both are needed: one says what the device can do,
     # the other what it is doing.
-    config = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_CONFIG)
-    state = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_STATE)
-    if not config or not state:
-        fail("device did not answer the backlight query", 4)
+    #
+    # Under contention -- and there is contention, because the widget polls
+    # the same device through the solaar CLI -- the device answers with a
+    # frame of zeros rather than not answering. That is not an error the
+    # caller can see: all-zero bytes are still bytes, so a naive check passes
+    # and the caller is handed "this keyboard has no levels and no effects",
+    # which would hide the control instead of retrying. A device that
+    # advertises BACKLIGHT2 always has at least one level, so levels == 0 is
+    # the tell.
+    for attempt in range(attempts):
+        config = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_CONFIG)
+        state = device.feature_request(feature.BACKLIGHT2, FEATURE_FN_GET_STATE)
+        if config and state and state[0] > 0:
+            break
+        if attempt < attempts - 1:
+            time.sleep(0.4)
+    else:
+        fail("device kept answering with an empty backlight state", 4)
 
     enabled, options, supported, effects, level, dho, dhi, dpow = struct.unpack(
         "<BBBHBHHH", config[:12]
