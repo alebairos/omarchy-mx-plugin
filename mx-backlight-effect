@@ -104,7 +104,12 @@ def main():
         target = int(sys.argv[2])
     except ValueError:
         fail(f"not an effect index: {sys.argv[2]}", 64)
-    if target not in available:
+    # An empty bitmap means the capability read was degraded -- typically
+    # contention, since the widget polls the same device -- not that the
+    # device supports nothing. Rejecting a valid effect because a read
+    # glitched is worse than letting the device decide, so only enforce the
+    # membership check when the bitmap actually came back.
+    if available and target not in available:
         fail(f"effect {target} not supported by this device (has {available})", 5)
 
     # Same layout Solaar's own Backlight.write() uses. It hardcodes the third

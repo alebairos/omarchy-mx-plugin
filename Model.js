@@ -214,11 +214,20 @@ function nextEffect(current, supported, delta) {
   return list[(at + step + list.length) % list.length]
 }
 
-// Names are not known yet: the value-to-effect mapping needs a human
-// watching the keyboard while each value is applied. Until that calibration
-// happens, label them honestly by index rather than guessing that 3 is
-// "Wave" and shipping a wrong label.
-var effectNames = {}
+// Value-to-name mapping, filled in by calibration: a human applies a value,
+// watches the keyboard, and reports what it does. Anything not yet
+// identified stays an honest "Effect N" rather than a guess -- a wrong
+// label is worse than no label, because it looks authoritative.
+//
+// Logitech documents six effects for this keyboard (Static, Contrast,
+// Breathing, Wave, Reaction, Random) while the device advertises seven
+// values, so one is expected to be a duplicate or unused.
+var effectNames = {
+  // 3: modifiers (tab, caps, shift) lit dimmer than the letters and numbers.
+  3: "Contrast",
+  // 5: keys light at random. Confirmed twice, independently.
+  5: "Random"
+}
 
 function effectLabel(index) {
   if (index === undefined || index === null || index < 0) return "\u2014"
