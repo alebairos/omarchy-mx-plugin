@@ -75,7 +75,7 @@ jobs:
             fi
           done
           # The docs a contributor or agent is pointed at must actually exist.
-          for doc in README.md CONTRIBUTING.md AGENTS.md CHANGELOG.md specs/constitution.md; do
+          for doc in README.md CONTRIBUTING.md AGENTS.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md specs/constitution.md; do
             test -f "$doc" || { echo "::error::missing $doc"; fail=1; }
           done
           exit $fail
