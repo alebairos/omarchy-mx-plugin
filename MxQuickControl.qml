@@ -750,7 +750,7 @@ Panel {
 
         Text {
           // mdi-auto-fix: the "effect" glyph, tinted like every other icon.
-          text: "\U000F0068"
+          text: "󰁨"
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.heading
