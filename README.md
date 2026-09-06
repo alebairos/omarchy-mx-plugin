@@ -5,7 +5,7 @@ battery status at a glance, and your keyboard's backlight controlled from
 the bar instead of from [Solaar](https://pwr-Solaar.github.io/Solaar/)'s
 window.
 
-> **Status: release candidate** (`1.0.0-rc.3`). It works and is used daily
+> **Status: release candidate** (`1.0.0-rc.4`). It works and is used daily
 > on the author's machine, but see [Supported devices](#supported-devices)
 > for exactly what has been tested versus what is expected to work, and
 > [Known limitations](#known-limitations) for what it does not do yet.
@@ -14,9 +14,13 @@ window.
 
 - Shows battery percentage for every Logitech device `solaar` reports —
   keyboard, mouse, or anything else it recognises.
-- **Click the bar icon** to open a panel with a backlight on/off toggle and
-  a brightness slider. The panel stays open, like Omarchy's own Network,
-  Bluetooth and Power panels.
+- **Click the bar icon** to open a panel with a backlight on/off toggle, a
+  brightness slider, and a lighting-effect selector. The panel stays open,
+  like Omarchy's own Network, Bluetooth and Power panels.
+- **Switch lighting effects** — Static, Breathing, Contrast, Reaction,
+  Random and Wave — from the panel. Solaar's CLI cannot do this; the plugin
+  reaches it through Solaar's own library, and the effect list comes from
+  what your device actually reports rather than a hardcoded table.
 - **Middle-click the bar icon** to launch Solaar, for the many settings this
   widget deliberately does not expose.
 - **Fully keyboard operable** — see [Keyboard control](#keyboard-control).
@@ -30,9 +34,9 @@ built-in ones — nothing extra to configure.
 | Key | Action |
 |---|---|
 | <kbd>Super</kbd>+<kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>9</kbd> | Open the *n*th panel in the bar's right section |
-| <kbd>↑</kbd> <kbd>↓</kbd> | Move between the backlight toggle and the brightness slider |
-| <kbd>←</kbd> <kbd>→</kbd> | Adjust brightness (on the slider row) |
-| <kbd>Enter</kbd> | Toggle the backlight |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Move between the toggle, the brightness slider and the effect row |
+| <kbd>←</kbd> <kbd>→</kbd> | Adjust brightness, or change effect, depending on the row |
+| <kbd>Enter</kbd> | Toggle the backlight, or cycle the effect when the cursor is on that row |
 | <kbd>Esc</kbd> | Close the panel |
 | <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Move to the next/previous panel |
 
@@ -187,6 +191,13 @@ Design decisions and their reasoning live in
 [`specs/`](specs/): the [constitution](specs/constitution.md),
 the [original feature spec](specs/001-mx-quick-control/), and the
 [release-candidate plan](specs/002-public-release-rc/).
+
+## More
+
+Notes from building this, and from running Omarchy generally, are at
+[omarchy.alebairos.xyz](https://omarchy.alebairos.xyz/) — including the
+write-ups of the bugs behind several of the odder-looking decisions in this
+code.
 
 ## License
 

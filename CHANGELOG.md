@@ -17,6 +17,51 @@ settings from `shell.json`, an explicit "Solaar not installed" state, and a
 README rewrite that separates verified hardware from hardware merely
 expected to work.
 
+## [1.0.0-rc.4] — 2026-09-06
+
+Adds lighting-effect control, and a good deal of hardening found by using it.
+
+### Added
+
+- **Lighting effects.** The panel gains a third row selecting the keyboard's
+  effect — Static, Breathing, Contrast, Reaction, Random, Wave — clickable,
+  right-clickable to go back, and reachable by keyboard like the other rows.
+  Solaar's CLI has no setting for this; the plugin reaches it through
+  Solaar's own `logitech_receiver` library, so it adds no dependency and
+  does not touch `/dev/hidraw` directly. The list comes from the device's
+  own capability bitmap rather than a hardcoded table, and each value was
+  calibrated against real hardware rather than guessed.
+- An "off" effect the device advertises is deliberately **not** offered: it
+  clears the backlight's enabled flag, and the panel already has a toggle
+  for that. Cycling skips it in both directions.
+- CI guards against a broken `\U` unicode escape in QML, and against real
+  device serials in test fixtures.
+
+### Fixed
+
+- **Every device read is now serialized.** The effect helper was missing
+  from the single-flight guard, so it ran concurrently with `solaar` calls
+  and both received degraded frames; separately, the panel's refresh-on-open
+  dropped its queue whenever anything was in flight. Together these left a
+  stale brightness level on screen after F4/F5.
+- **Switching to a static effect left the previous effect's last frame**
+  frozen on the keys. A brief off-pulse before applying clears it.
+- **The helper could strand the keyboard dark**, by carrying through an
+  `enabled` flag the off-effect had cleared.
+- **Degraded reads returned zeros rather than errors**, which the panel
+  would have read as "this keyboard has no effects" and hidden the row.
+- The brightness slider's maximum is read from the device's reported level
+  count instead of assuming eight and correcting after a rejected write.
+- The effect row's icon rendered as the literal text `f0068`, because
+  `\U000F0068` is not a valid QML escape.
+
+### Changed
+
+- Real device serials removed from the committed test fixture.
+- Repository opened to contributors: `main` is protected, merges are
+  rebase-only, and there are PR and issue templates, a security policy and a
+  code of conduct.
+
 ## [1.0.0-rc.3] — 2026-09-04
 
 Housekeeping release. No change to how the plugin behaves; a large change to
@@ -158,7 +203,8 @@ verification, and are the reason the test suite in `rc.2` exists.
 - Plugin id namespaced to the publisher; `omarchy.*` is reserved for
   first-party plugins and installation is refused outright.
 
-[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.3...HEAD
+[Unreleased]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.4...HEAD
+[1.0.0-rc.4]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.3...v1.0.0-rc.4
 [1.0.0-rc.3]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.2...v1.0.0-rc.3
 [1.0.0-rc.2]: https://github.com/alebairos/omarchy-mx-plugin/compare/v1.0.0-rc.1...v1.0.0-rc.2
 [1.0.0-rc.1]: https://github.com/alebairos/omarchy-mx-plugin/releases/tag/v1.0.0-rc.1
