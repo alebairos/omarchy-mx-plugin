@@ -139,6 +139,26 @@ hardware. Reports welcome:
 - Setups with **more than one backlit keyboard**. Only the first
   backlight-capable device is controlled; the rest show battery only.
 
+## Settings
+
+Optional, and set the same way as any other Omarchy widget — add keys to
+this widget's entry in `~/.config/omarchy/shell.json`:
+
+```json
+{ "id": "alebairos.mx-quick-control",
+  "defaultOnLevel": 4,
+  "refreshMinutes": 5,
+  "showBattery": true }
+```
+
+| key | default | what it does |
+|---|---|---|
+| `defaultOnLevel` | `4` | Brightness used when switching on from fully off, before any level has been remembered. Clamped to 1–7. |
+| `refreshMinutes` | `5` | How often to re-enumerate devices. This is the expensive `solaar show` (~10s), needed only for discovery and battery, so the minimum is 1. |
+| `showBattery` | `true` | Set to `false` to hide battery percentages entirely. |
+
+All three are optional; omit them and the defaults apply.
+
 ## Known limitations
 
 - **Roughly 2–3 seconds per action.** Each `solaar` invocation costs about
