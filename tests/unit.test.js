@@ -239,3 +239,17 @@ test("the device's level count is read, not assumed", () => {
   assert.equal(small.levels - 1, 3)
   assert.equal(M.clampLevel(7, small.levels - 1), 3)
 })
+
+test("a keyboard that vanishes from one read is not believed immediately", () => {
+  // The device answers contention with a well-formed frame that omits the
+  // BACKLIGHT2 block, so a degraded read is indistinguishable from a real
+  // disappearance. Believing the first one made the widget announce "no
+  // backlight-capable keyboard" while the keyboard was working.
+  assert.equal(M.shouldTrustKeyboardLoss(true, 1), false, "one miss is not proof")
+  assert.equal(M.shouldTrustKeyboardLoss(true, 2), false)
+  assert.equal(M.shouldTrustKeyboardLoss(true, M.missesBeforeBelievingLoss), true)
+
+  // Never having had a keyboard is not a loss -- there is nothing to doubt,
+  // and the widget must say so straight away rather than stalling.
+  assert.equal(M.shouldTrustKeyboardLoss(false, 1), true)
+})

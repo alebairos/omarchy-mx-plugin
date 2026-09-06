@@ -262,6 +262,23 @@ function effectLabel(index) {
   return effectNames[index] !== undefined ? effectNames[index] : ("Effect " + index)
 }
 
+// A `solaar show` that lists devices but reports no backlight-capable one is
+// usually a degraded read, not a keyboard that vanished. The device answers
+// contention with a well-formed frame that simply omits fields, so "the
+// BACKLIGHT2 block is missing" and "this keyboard has no backlight" look
+// identical from here.
+//
+// Believing the first such read is what made the widget announce "no
+// backlight-capable keyboard" while the keyboard sat there working. So a
+// disappearance has to be confirmed: keep the previous state and re-read,
+// and only publish the loss once it has been seen repeatedly.
+var missesBeforeBelievingLoss = 3
+
+function shouldTrustKeyboardLoss(hadKeyboardBefore, consecutiveMisses) {
+  if (!hadKeyboardBefore) return true          // never had one; nothing to doubt
+  return consecutiveMisses >= missesBeforeBelievingLoss
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseDevices: parseDevices,
@@ -279,6 +296,8 @@ if (typeof module !== "undefined" && module.exports) {
     excludedEffects: excludedEffects,
     nextEffect: nextEffect,
     effectLabel: effectLabel,
-    effectNames: effectNames
+    effectNames: effectNames,
+    shouldTrustKeyboardLoss: shouldTrustKeyboardLoss,
+    missesBeforeBelievingLoss: missesBeforeBelievingLoss
   }
 }
