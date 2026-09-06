@@ -177,6 +177,91 @@ function learnLevelMax(stderrText, attemptedLevel) {
   return attemptedLevel - 1
 }
 
+// ------------------------------------------------------- backlight effects
+
+// Parse the helper's `get` line:
+//   "levels=8 level=3 effect=6 supported=0,1,2,3,4,5,6"
+// Returns effect -1 and an empty list when the line is unusable, so a caller
+// can hide the control rather than offer values the device would reject.
+function parseEffectState(text) {
+  var s = String(text || "")
+  var out = { levels: 0, level: 0, effect: -1, supported: [] }
+  var m
+
+  m = s.match(/levels=(\d+)/);        if (m) out.levels = parseInt(m[1], 10)
+  m = s.match(/\blevel=(\d+)/);      if (m) out.level = parseInt(m[1], 10)
+  m = s.match(/effect=(\d+)/);        if (m) out.effect = parseInt(m[1], 10)
+  m = s.match(/supported=([0-9,]+)/)
+  if (m) {
+    var parts = m[1].split(",")
+    for (var i = 0; i < parts.length; i++) {
+      if (parts[i] === "") continue
+      var v = parseInt(parts[i], 10)
+      if (!isNaN(v)) out.supported.push(v)
+    }
+  }
+  return out
+}
+
+// The effect after this one, wrapping. Cycling is how the keyboard's own key
+// behaves, so the panel matches it.
+function nextEffect(current, supported, delta) {
+  var list = supported || []
+  if (list.length === 0) return current
+  var at = list.indexOf(current)
+  if (at === -1) return list[0]
+  var step = delta < 0 ? -1 : 1
+  return list[(at + step + list.length) % list.length]
+}
+
+// Value-to-name mapping, filled in by calibration: a human applies a value,
+// watches the keyboard, and reports what it does. Anything not yet
+// identified stays an honest "Effect N" rather than a guess -- a wrong
+// label is worse than no label, because it looks authoritative.
+//
+// Fully calibrated on an MX Mechanical Mini: all six effects Logitech
+// documents (Static, Contrast, Breathing, Wave, Reaction, Random) are
+// accounted for, and the seventh value the device advertises turned out to
+// be "off" rather than a duplicate -- which is why it is excluded above.
+// Effects the panel deliberately does not offer. Effect 1 on the MX
+// Mechanical Mini is an "off" effect: selecting it clears the device's
+// enabled flag and forces the level to 0. The panel already has an on/off
+// toggle, so leaving it in the cycle would give two controls for one state
+// and let an ordinary effect change silently switch the backlight off --
+// the same dead end the brightness slider had when its range started at 0.
+var excludedEffects = [1]
+
+function selectableEffects(supported) {
+  var out = []
+  var list = supported || []
+  for (var i = 0; i < list.length; i++) {
+    if (excludedEffects.indexOf(list[i]) === -1) out.push(list[i])
+  }
+  return out
+}
+
+var effectNames = {
+  // 0: every key steadily lit, no animation.
+  0: "Static",
+  // 1: not offered in the panel -- it turns the backlight off entirely.
+  1: "Off",
+  // 2: every key pulses smoothly in and out.
+  2: "Breathing",
+  // 3: modifiers (tab, caps, shift) lit dimmer than the letters and numbers.
+  3: "Contrast",
+  // 4: only the keys being pressed light up.
+  4: "Reaction",
+  // 5: keys light at random. Confirmed twice, independently.
+  5: "Random",
+  // 6: a column of light sweeps across the keyboard.
+  6: "Wave"
+}
+
+function effectLabel(index) {
+  if (index === undefined || index === null || index < 0) return "\u2014"
+  return effectNames[index] !== undefined ? effectNames[index] : ("Effect " + index)
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseDevices: parseDevices,
@@ -188,6 +273,12 @@ if (typeof module !== "undefined" && module.exports) {
     toggleTarget: toggleTarget,
     planSetLevel: planSetLevel,
     planToggle: planToggle,
-    learnLevelMax: learnLevelMax
+    learnLevelMax: learnLevelMax,
+    parseEffectState: parseEffectState,
+    selectableEffects: selectableEffects,
+    excludedEffects: excludedEffects,
+    nextEffect: nextEffect,
+    effectLabel: effectLabel,
+    effectNames: effectNames
   }
 }

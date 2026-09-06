@@ -175,3 +175,54 @@ test("an out-of-bounds rejection teaches the real maximum", () => {
   assert.equal(M.learnLevelMax("some other failure", 8), null)
   assert.equal(M.learnLevelMax("", 8), null)
 })
+
+// ------------------------------------------------------- backlight effects
+
+test("parses the effect helper's state line", () => {
+  const st = M.parseEffectState("levels=8 level=3 effect=6 supported=0,1,2,3,4,5,6")
+  assert.equal(st.levels, 8)
+  assert.equal(st.level, 3)
+  assert.equal(st.effect, 6)
+  assert.deepEqual(st.supported, [0, 1, 2, 3, 4, 5, 6])
+})
+
+test("a degraded effect read yields no effects rather than a false one", () => {
+  // The device answers with zeros under contention. The helper retries, but
+  // if a bad line ever reaches here it must not look like a real state.
+  const st = M.parseEffectState("levels=0 level=0 effect=0 supported=none")
+  assert.deepEqual(st.supported, [])
+  assert.equal(M.selectableEffects(st.supported).length, 0)
+  assert.equal(M.parseEffectState("").effect, -1)
+  assert.equal(M.parseEffectState(null).supported.length, 0)
+})
+
+test("the off-effect is never offered as an effect", () => {
+  // Effect 1 clears the device's enabled flag and forces level 0. The panel
+  // has a toggle for that; offering it here let a plain effect change switch
+  // the backlight off with no obvious way back.
+  assert.deepEqual(M.selectableEffects([0, 1, 2, 3, 4, 5, 6]), [0, 2, 3, 4, 5, 6])
+  assert.ok(M.excludedEffects.includes(1))
+})
+
+test("cycling skips the excluded effect in both directions", () => {
+  const sel = M.selectableEffects([0, 1, 2, 3, 4, 5, 6])
+  assert.equal(M.nextEffect(0, sel, 1), 2, "forward from 0 skips 1")
+  assert.equal(M.nextEffect(2, sel, -1), 0, "backward from 2 skips 1")
+  assert.equal(M.nextEffect(6, sel, 1), 0, "wraps to the start")
+  assert.equal(M.nextEffect(0, sel, -1), 6, "wraps to the end")
+})
+
+test("effect labels use known names and stay honest otherwise", () => {
+  assert.equal(M.effectLabel(0), "Static")
+  assert.equal(M.effectLabel(2), "Breathing")
+  assert.equal(M.effectLabel(3), "Contrast")
+  assert.equal(M.effectLabel(4), "Reaction")
+  assert.equal(M.effectLabel(5), "Random")
+  assert.equal(M.effectLabel(6), "Wave")
+  assert.equal(M.effectLabel(99), "Effect 99", "unmapped values must not be guessed")
+  assert.equal(M.effectLabel(-1), "\u2014")
+})
+
+test("cycling an empty set is a no-op rather than an error", () => {
+  assert.equal(M.nextEffect(3, [], 1), 3)
+})
