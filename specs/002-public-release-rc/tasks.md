@@ -106,7 +106,7 @@ the widget if the bar is rearranged.
           chain the other five paths did not exercise.
       All six keyboard paths are confirmed at the keyboard; this task is
       done.
-- [ ] T035 **OSD and sync when the backlight is changed with the hardware
+- [x] T035 **OSD and sync when the backlight is changed with the hardware
       backlight keys (F4 / F5, pressed bare — this keyboard has `fn-swap`
       enabled, so the special function is the unmodified press).** Currently the OSD only appears for changes this
       widget makes; a hardware key press changes the device without the
@@ -140,12 +140,23 @@ the widget if the bar is rearranged.
         - Binding F4/F5 in Hyprland would work but swallows those keys from
           every application. Rejected unless nothing else pans out.
 
-      Not a 1.0.0 blocker: the panel already re-reads on open, so the widget
-      never *lies*, it is just late.
-- [ ] T034 [US2] **HITL:** confirm the OSD actually appears on a backlight
-      change and reads sensibly — the keyboard icon, and "3/7" rather than a
-      percentage, with "Off" at level 0. The payload is accepted (`summon`
-      returns ok) but whether it *looks* right cannot be checked from here.
+      **Done**, via the route this task guessed at: `solaar-rule.yaml`, an
+      opt-in rule using Solaar's `Feature: BACKLIGHT2` condition and an
+      `Execute` action calling the widget's `deviceChanged` IPC. The plugin
+      still runs no daemon -- the listening is delegated to a process the
+      user already runs. Verified on hardware: the panel follows F4/F5 and
+      the lamp key live, with an OSD, in about 2 seconds.
+
+      Two bugs surfaced getting there, both worth remembering: the effect
+      OSD never fired because `onExited` raced `onStreamFinished` and the
+      effect read was last in the queue; and the OSD lagged ~5s because an
+      external change ran three reads when the effect helper's single call
+      already reports level and effect together.
+- [x] T034 [US2] **HITL:** confirm the OSD actually appears on a backlight
+      change and reads sensibly. Confirmed at the screen: it appears for
+      brightness changes made in the panel, and — once T035's rule was
+      installed and the race above fixed — for the keyboard's own F4/F5 and
+      lamp keys too.
 - [ ] T029 [US2] Confirm the cursor appears only after the first arrow press
       when the panel is opened with the mouse, and decide what should happen
       when it is opened with `SUPER + CTRL + 1`: a keyboard-summoned panel
