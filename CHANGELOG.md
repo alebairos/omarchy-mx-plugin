@@ -11,11 +11,59 @@ merged to only from a branch whose CI is green.
 
 ## [Unreleased]
 
-Remaining before `1.0.0`: vertical-bar layout, on-screen display when the
-level changes, a targeted refresh when the panel opens, per-instance
-settings from `shell.json`, an explicit "Solaar not installed" state, and a
-README rewrite that separates verified hardware from hardware merely
-expected to work.
+## [1.1.0] — 2026-09-07
+
+One transport to the device. The plugin previously reached the keyboard
+three different ways — `solaar show` (10.5s), `solaar config` (2.2s per
+call) and a bundled effect helper (2.1s) — across six call sites. All of it
+is now a single bundled transport, `mx-device`, speaking JSON over Solaar's
+own `logitech_receiver` library.
+
+No new features. This is a data-path rewrite, and every user-visible
+behaviour is meant to be identical apart from speed.
+
+### Changed
+
+- Opening the panel issues **one** device call instead of three. Measured
+  interleaved with 1.0.0 on the reference hardware, alternating within the
+  same minute so both meet the same device conditions: 6475 / 6832 / 6626 ms
+  before, 2185 / 1874 / 2096 ms after.
+- Device discovery no longer costs a separate 10.5s enumeration; the same
+  single call returns the device list.
+- A user-visible action issues exactly one device invocation, and a
+  successful write is no longer followed by a read to confirm it.
+- The brightness slider's maximum is read from the device on every refresh
+  rather than being corrected only after a write is rejected as out of
+  range.
+
+### Fixed
+
+- **"No backlight-capable keyboard" while the keyboard was working.** A
+  contended read that omitted the device's backlight block was
+  indistinguishable from a keyboard that has no backlight, because scraped
+  text cannot express "I could not read this". The transport reports
+  `no-receiver`, `no-devices`, `unreadable` and `rejected` as distinct
+  answers, and the panel now says "Could not read the keyboard" rather than
+  claiming there is none. A failed read no longer tears down working state.
+- A missing receiver reported "no devices" rather than "no receiver".
+  Found by the test suite, not by hardware.
+
+### Removed
+
+- `mx-backlight-effect`, the `solaar show` text parser, and every `solaar`
+  invocation in the data path. Solaar is still required — the plugin uses
+  its library — and is still what the panel's middle-click opens.
+
+### Internal
+
+- `mx-device` is covered by a stub `logitech_receiver`, so the transport can
+  be driven without hardware and every degraded frame that caused a 1.0.0
+  bug is reproducible on demand.
+- The node-probe budget is asserted by a test. Solaar's `Device` constructor
+  spends up to one second per device in a busy-wait looking for a hidraw
+  node that receiver-paired devices do not have — measured at 1001ms,
+  returning nothing, and two thirds of every invocation's cost. Restoring
+  that default would be invisible without the test.
 
 ## [1.0.0] — 2026-09-06
 

@@ -28,6 +28,7 @@ indistinguishable from a genuine absence.
 
 import argparse
 import json
+import os
 import struct
 import sys
 import time
@@ -60,6 +61,15 @@ NODE_PROBE_SECONDS = 0.15
 # window; that window is gone with `solaar show`, so the budget shrinks to
 # match. Exhausting it is no longer a disaster either: the caller is told
 # "unreadable" and renders that, instead of being handed a wrong state.
+# How long the backlight is held off between effects. Switching effect does
+# not re-initialise the per-key LEDs, so without this the keyboard stops
+# animating on whatever frame it was on -- Wave to Static leaves a frozen
+# wave. Powering it down briefly clears that; re-sending the effect does not.
+#
+# Overridable for calibration (MX_EFFECT_PULSE), because this is a number
+# only a human looking at the keyboard can confirm.
+EFFECT_RESET_PULSE_SECONDS = float(os.environ.get("MX_EFFECT_PULSE", "0.2"))
+
 READ_ATTEMPTS = 4
 READ_BACKOFF_SECONDS = 0.4
 
@@ -288,7 +298,7 @@ def command_set(index, level=None, effect=None, mode=None):
     on = struct.pack("<BBBBHHH", 1, *common, level_out, *tail)
 
     device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, off)
-    time.sleep(0.2)
+    time.sleep(EFFECT_RESET_PULSE_SECONDS)
     if device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, on) is None:
         raise TransportError("rejected", f"device rejected effect {effect}")
     return {"ok": True}

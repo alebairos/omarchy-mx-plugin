@@ -139,16 +139,34 @@ and a live level of 6, and a test asserts 6.
 
 - [ ] T028 Run feature 001's `quickstart.md` end to end
 - [ ] T029 Run the 1.0.0 acceptance pass: toggle, brightness, effects, panel refresh, hardware keys with the Solaar rule, vertical bar (SC-005)
-- [ ] T030 Measure and record SC-001 (panel open under 1.5s), SC-002 (no `solaar show`), SC-003 (one invocation per action)
-- [ ] T031 Verify on a machine that has never seen the plugin: `omarchy plugin add … --enable`
-- [ ] T032 Verify the upgrade path a real user takes: `omarchy plugin update` fast-forwarding from `v1.0.0` to the new tip
-- [ ] T033 Rehearse the rollback: `git revert` the feature on a scratch clone, confirm it fast-forwards cleanly for a user already on the new tip
-- [ ] T034 Bump `manifest.json` and `package.json` to `1.1.0`
-- [ ] T035 Update `README.md` — the "roughly two seconds per action" limitation is no longer true
-- [ ] T036 Update `CHANGELOG.md`, tag `v1.1.0`, and cut the GitHub release
+- [x] T030 Measure and record SC-001 (panel open under 1.5s), SC-002 (no `solaar show`), SC-003 (one invocation per action)
+- [x] T031 Verify on a machine that has never seen the plugin: `omarchy plugin add … --enable`
+- [x] T032 Verify the upgrade path a real user takes: `omarchy plugin update` fast-forwarding from `v1.0.0` to the new tip
+- [x] T033 Rehearse the rollback: `git revert` the feature on a scratch clone, confirm it fast-forwards cleanly for a user already on the new tip
+- [x] T034 Bump `manifest.json` and `package.json` to `1.1.0`
+- [x] T035 Update `README.md` — the "roughly two seconds per action" limitation is no longer true
+- [x] T036 Update `CHANGELOG.md`; tag `v1.1.0` and cut the GitHub release *(tag pending: see the effect-switch regression below)*
 - [ ] T037 [P] Report the `find_paired_node` busy-wait upstream to Solaar, with the measurements
 
 **Checkpoint**: 1.1.0 is tagged, installable, upgradable, and revertible.
+
+**Rollback rehearsed, not assumed** (T033). Against a bare clone standing in
+for GitHub, with a second clone standing in for a user already on the new
+tip: `git revert` of the Phase C commit, pushed to `main`, then
+`git fetch origin HEAD && git merge --ff-only FETCH_HEAD` exactly as
+`omarchy-plugin-update` runs it. The user fast-forwards onto the revert and
+`mx-backlight-effect` comes back. This is the manoeuvre plan.md says must
+never be a history rewrite, and it is now known to work rather than believed
+to.
+
+**Open regression**: switching from an animated effect (Wave) to Static can
+leave the previous effect's last frame lit. 1.0.0 mitigated this by blanking
+the backlight between effects; that mitigation is not sufficient. Register
+state is correct in every case — the device reports the new effect at the
+right level — so this is visible only to a human, and is being calibrated
+per `specs/research/hitl-calibration.md`. Lengthening the blanking pulse to
+0.5s and 1.0s did not help, which rules out the timing hypothesis. Recorded
+in the README as a known limitation until it is fixed.
 
 ---
 
