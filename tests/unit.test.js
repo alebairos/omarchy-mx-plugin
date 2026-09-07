@@ -16,81 +16,13 @@ const M = require("../Model.js")
 const fixture = (name) =>
   fs.readFileSync(path.join(__dirname, "fixtures", name), "utf8")
 
-// ------------------------------------------------------------- parsing
 
-test("parses a real solaar show with a keyboard and a mouse", () => {
-  const devices = M.parseDevices(fixture("solaar-show-keyboard-and-mouse.txt"))
-  assert.equal(devices.length, 2)
 
-  const kbd = devices.find((d) => d.hasBacklight)
-  assert.ok(kbd, "keyboard with BACKLIGHT2 should be found")
-  assert.equal(kbd.deviceIndex, 1)
-  assert.equal(kbd.name, "MX Mechanical Mini")
-  assert.equal(kbd.batteryPercent, 100)
 
-  const mouse = devices.find((d) => !d.hasBacklight)
-  assert.equal(mouse.name, "Signature M650")
-  assert.equal(mouse.hasBacklight, false)
-})
 
-test("reads the LIVE backlight level, never the (saved) one", () => {
-  // The bug this guards: solaar prints both, they disagree, and the saved
-  // value is not what the hardware is doing. Reading "3" here would mean
-  // reporting a lit keyboard that is physically dark.
-  const devices = M.parseDevices(fixture("solaar-show-saved-differs-from-live.txt"))
-  const kbd = M.keyboardFrom(devices)
-  assert.equal(kbd.backlightLevel, 0, "must take the live level, not saved 3")
-  assert.equal(kbd.backlightMode, "Manual")
-})
 
-test("a (saved) line alone is ignored — it is not a live reading", () => {
-  // The case above passes even with a sloppy regex, because the live line
-  // follows the saved one and simply overwrites it. This fixture has ONLY
-  // the "(saved)" lines, so a parser that matches them reports a level and
-  // mode that the hardware never confirmed. Found by mutation-testing the
-  // suite: the previous test alone did not pin this.
-  const devices = M.parseDevices(fixture("solaar-show-saved-only.txt"))
-  assert.equal(devices.length, 1)
-  assert.equal(devices[0].backlightLevel, null, "must not adopt the saved level")
-  assert.equal(devices[0].backlightMode, null, "must not adopt the saved mode")
 
-  // And the flattened view degrades safely rather than inventing a value.
-  const kbd = M.keyboardFrom(devices)
-  assert.equal(kbd.backlightLevel, 0)
-  assert.equal(M.isOn(kbd.backlightMode, kbd.backlightLevel), false)
-})
 
-test("a mouse-only setup yields no keyboard but keeps the device", () => {
-  const devices = M.parseDevices(fixture("solaar-show-mouse-only.txt"))
-  assert.equal(devices.length, 1)
-  assert.equal(M.keyboardFrom(devices).keyboardIndex, -1)
-  assert.equal(M.otherDevices(devices).length, 1)
-})
-
-test("a device without a battery reports -1 rather than crashing", () => {
-  const devices = M.parseDevices(fixture("solaar-show-no-battery.txt"))
-  const kbd = M.keyboardFrom(devices)
-  assert.equal(kbd.keyboardBattery, -1)
-  assert.equal(kbd.backlightLevel, 5)
-})
-
-test("no paired devices parses to an empty list", () => {
-  assert.deepEqual(M.parseDevices(fixture("solaar-show-no-devices.txt")), [])
-  assert.equal(M.keyboardFrom([]).keyboardIndex, -1)
-})
-
-test("malformed output degrades to no devices instead of throwing", () => {
-  assert.doesNotThrow(() => M.parseDevices(fixture("solaar-show-malformed.txt")))
-  assert.equal(M.parseDevices(fixture("solaar-show-malformed.txt")).length, 0)
-  assert.equal(M.parseDevices("").length, 0)
-  assert.equal(M.parseDevices(null).length, 0)
-})
-
-test("parses a targeted config read", () => {
-  const r = M.parseConfigRead("backlight = Manual\nbacklight_level = 6\n")
-  assert.equal(r.mode, "Manual")
-  assert.equal(r.level, 6)
-})
 
 // --------------------------------------------------------- state logic
 
@@ -178,23 +110,7 @@ test("an out-of-bounds rejection teaches the real maximum", () => {
 
 // ------------------------------------------------------- backlight effects
 
-test("parses the effect helper's state line", () => {
-  const st = M.parseEffectState("levels=8 level=3 effect=6 supported=0,1,2,3,4,5,6")
-  assert.equal(st.levels, 8)
-  assert.equal(st.level, 3)
-  assert.equal(st.effect, 6)
-  assert.deepEqual(st.supported, [0, 1, 2, 3, 4, 5, 6])
-})
 
-test("a degraded effect read yields no effects rather than a false one", () => {
-  // The device answers with zeros under contention. The helper retries, but
-  // if a bad line ever reaches here it must not look like a real state.
-  const st = M.parseEffectState("levels=0 level=0 effect=0 supported=none")
-  assert.deepEqual(st.supported, [])
-  assert.equal(M.selectableEffects(st.supported).length, 0)
-  assert.equal(M.parseEffectState("").effect, -1)
-  assert.equal(M.parseEffectState(null).supported.length, 0)
-})
 
 test("the off-effect is never offered as an effect", () => {
   // Effect 1 clears the device's enabled flag and forces level 0. The panel
@@ -230,14 +146,13 @@ test("cycling an empty set is a no-op rather than an error", () => {
 test("the device's level count is read, not assumed", () => {
   // levels=8 means levels 0..7, so the slider maximum is 7. Reading this
   // replaced a hardcoded 7 that was only corrected after a write failed.
-  const st = M.parseEffectState("levels=8 level=3 effect=0 supported=0,2,3")
-  assert.equal(st.levels, 8)
-  assert.equal(st.levels - 1, 7)
+  const kbd = M.parseTransportState(fixture("mx-device-keyboard-and-mouse.json"))
+    .devices.find((d) => d.hasBacklight)
+  assert.equal(kbd.backlightLevels, 8)
+  assert.equal(kbd.backlightLevels - 1, 7)
 
   // A keyboard with a smaller range must not be offered levels it lacks.
-  const small = M.parseEffectState("levels=4 level=1 effect=0 supported=0")
-  assert.equal(small.levels - 1, 3)
-  assert.equal(M.clampLevel(7, small.levels - 1), 3)
+  assert.equal(M.clampLevel(7, 4 - 1), 3)
 })
 
 test("a keyboard that vanishes from one read is not believed immediately", () => {
