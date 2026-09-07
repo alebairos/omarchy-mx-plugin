@@ -21,6 +21,63 @@ reference hardware):
 | `solaar config <n> <setting> [value]` | reading and writing mode and level | **2s** per call |
 | `mx-backlight-effect` (bundled, uses `logitech_receiver`) | reading and setting the effect, and reporting level | **2s** |
 
+Those totals were re-confirmed on 2026-09-06 after the spec's first draft:
+`solaar show` 10496/10629ms, `solaar config` 2279/2191ms and 2234/2222ms,
+the helper 2102/2116ms. Opening the panel runs the last three in sequence:
+**6.6s**.
+
+### Where that time actually goes
+
+The first draft of this spec assumed the per-call cost was irreducible —
+the helper does one `logitech_receiver` round trip and takes 2.1s, so 2s
+looked like a floor. It is not. Timed stage by stage:
+
+| stage | cost |
+|---|---|
+| Python + `logitech_receiver` imports | 190 ms |
+| `base.receivers()` | 80 ms |
+| `list(receiver)` — constructing Device objects | **2136 ms** |
+| `ping()` per device | 590–890 ms |
+| `.name`, `.battery()` | ~90 ms each |
+| `feature_request` — the backlight data itself | **14–21 ms** |
+
+The data this plugin exists to read costs **15 milliseconds**. Everything
+else is setup, and interpreter startup — the suspected culprit — is 6%.
+
+`list(receiver)` measured 2136/2137/2139 ms across three runs. A 3ms spread
+over two seconds is a fixed timeout, not device I/O. It is this, in
+`logitech_receiver/device.py:183`:
+
+```python
+if not self.path:
+    self.path = self.low_level.find_paired_node(receiver.path, number, 1) if receiver else None
+```
+
+A one-second budget, per device, spent in `hidapi/udev_impl.py:204` on a
+busy-wait that rescans every hidraw node until it expires. On this hardware
+it cannot succeed — these devices are reached through the receiver's own
+handle and expose no individual hidraw node:
+
+```
+find_paired_node(idx=1, timeout=1s) ->  1001 ms   node=None
+find_paired_node(idx=1, timeout=0s) ->     1 ms   node=None
+find_paired_node(idx=2, timeout=1s) ->  1002 ms   node=None
+find_paired_node(idx=2, timeout=0s) ->     1 ms   node=None
+```
+
+One full scan takes 52ms; the remaining 948ms waits for a device that will
+never appear. Two devices, two seconds, on **every** invocation — including
+each of the three that make up a panel open, and every device `solaar show`
+enumerates, which is much of why that costs ten seconds.
+
+Passing a budget that permits one scan, and dropping the `ping()` the
+subsequent reads make redundant, a single call returning everything the
+widget needs measured **733, 734, 761, 796, 804, 1303 ms** — with
+byte-identical device data to the slow path.
+
+This changes the size of the prize, not the design. One call is still the
+right shape; it is simply worth ~8x rather than ~2x.
+
 Two consequences follow, and both were felt in 1.0.0 rather than predicted.
 
 ### Consequence 1: a recurring class of bug
@@ -158,16 +215,30 @@ keys with the Solaar rule, vertical bar.
 - **FR-006**: No daemon or persistent connection may be introduced.
 - **FR-007**: Output MUST be machine-readable (JSON), so parsing is not
   another place for a degraded frame to look valid.
+- **FR-009**: The transport MUST NOT pay `find_paired_node`'s default
+  one-second-per-device budget. It MUST pass a budget that still permits at
+  least one complete udev scan, so a device whose node genuinely exists is
+  still found, and MUST record the trade-off where it is set.
+- **FR-010**: The transport MUST NOT issue a `ping()` whose only purpose is
+  to establish liveness that the following read establishes anyway.
 - **FR-008**: The parser and the plausibility rules MUST be unit-tested, and
   the command sequence MUST be covered by functional tests against a fake
   transport that can emit degraded frames on demand.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: Opening the panel reflects device state in **under 3 seconds**
-  (from ~6s), measured on the reference hardware.
-- **SC-002**: Device discovery no longer costs 11 seconds; there is no
-  `solaar show` in the data path.
+- **SC-001**: Opening the panel reflects device state in **under 1.5
+  seconds** (from 6.6s measured), on the reference hardware with the Solaar
+  GUI running. The observed figure is ~0.8s; the criterion carries headroom
+  for contention rather than asserting the best case.
+
+  *The first draft set this at "under 3 seconds". That was written before
+  the stage timings above and is about four times too conservative — it
+  would have been met by a change that left the two-second spin loop in
+  place, which is the entire finding.*
+- **SC-002**: Device discovery no longer costs 10.5 seconds; there is no
+  `solaar show` in the data path, and the device list arrives from the same
+  single call as everything else.
 - **SC-003**: A user-visible action issues **exactly one** device
   invocation.
 - **SC-004**: Every degraded-frame scenario from 1.0.0 is reproducible in
@@ -182,6 +253,13 @@ keys with the Solaar rule, vertical bar.
   this feature deepens that dependency, which is the main risk and is
   accepted deliberately — the alternative is reimplementing HID++, which the
   constitution forbids for good reason.
+- `find_paired_node` returning `None` for these devices is a property of
+  how they attach (through the receiver's handle), not a fault to be fixed
+  here. A shortened budget is therefore behaviour-preserving on this
+  hardware and merely faster; on hardware where the node does exist, one
+  complete scan still finds it. What is given up is the grace period for a
+  node that appears *during* the probe. This is worth reporting upstream:
+  it taxes every Solaar invocation on every machine.
 - Contention with *other* processes (the Solaar GUI, a user's own `solaar`
   commands) cannot be eliminated, only made less likely by reducing the
   number and duration of our own invocations. The retry and plausibility
