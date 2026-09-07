@@ -37,7 +37,7 @@ looked like a floor. It is not. Timed stage by stage:
 | Python + `logitech_receiver` imports | 190 ms |
 | `base.receivers()` | 80 ms |
 | `list(receiver)` — constructing Device objects | **2136 ms** |
-| `ping()` per device | 590–890 ms |
+| `ping()` per device (lazy; happens whether or not it is called) | 590–890 ms |
 | `.name`, `.battery()` | ~90 ms each |
 | `feature_request` — the backlight data itself | **14–21 ms** |
 
@@ -70,13 +70,42 @@ never appear. Two devices, two seconds, on **every** invocation — including
 each of the three that make up a panel open, and every device `solaar show`
 enumerates, which is much of why that costs ten seconds.
 
-Passing a budget that permits one scan, and dropping the `ping()` the
-subsequent reads make redundant, a single call returning everything the
-widget needs measured **733, 734, 761, 796, 804, 1303 ms** — with
-byte-identical device data to the slow path.
+Passing a budget that permits one scan cuts `list(receiver)` from 2136ms to
+436ms, reproducibly.
+
+### Two corrections to the above, from building it
+
+The first draft of this section also claimed that dropping the explicit
+`ping()` was worth ~950ms. **It is not, and the claim has been withdrawn.**
+`Device.protocol` pings lazily on first use, so exactly one ping per device
+happens either way — counted, not assumed. Run interleaved rather than in
+sequence, the two orderings are within noise of each other (~720ms both
+ways); the apparent saving was a cold first run that happened to land in the
+`ping()` column. There is still a reason not to call it — a ping whose
+result the next read re-establishes is one more thing that can fail — but it
+is a simplicity argument, not a performance one.
+
+The second correction is the headline. A single call measured **715–804ms**
+in one window and **1874–2185ms** in another, with identical code and no
+change to the machine. The difference is per-device HID++ round-trip
+latency, which varies from ~15ms to ~900ms with the wireless devices' own
+power state and is not ours to control. Pausing the Solaar GUI changed
+nothing, so this is not contention with another process.
+
+The comparison that survives this is an interleaved one, where both paths
+meet the same conditions in the same minute:
+
+| | run 1 | run 2 | run 3 |
+|---|---|---|---|
+| 1.0.0 panel open | 6475 ms | 6832 ms | 6626 ms |
+| `mx-device state` | 2185 ms | 1874 ms | 2096 ms |
+
+**~3.2x**, holding in the conditions where 1.0.0 costs its full 6.6s. When
+the devices are responsive the single call drops to ~0.75s; 1.0.0 was not
+measured in that same window, so no larger ratio is claimed here.
 
 This changes the size of the prize, not the design. One call is still the
-right shape; it is simply worth ~8x rather than ~2x.
+right shape.
 
 Two consequences follow, and both were felt in 1.0.0 rather than predicted.
 
@@ -219,23 +248,29 @@ keys with the Solaar rule, vertical bar.
   one-second-per-device budget. It MUST pass a budget that still permits at
   least one complete udev scan, so a device whose node genuinely exists is
   still found, and MUST record the trade-off where it is set.
-- **FR-010**: The transport MUST NOT issue a `ping()` whose only purpose is
-  to establish liveness that the following read establishes anyway.
+- **FR-010**: The transport SHOULD NOT issue a `ping()` whose only purpose
+  is to establish liveness that the following read establishes anyway —
+  on simplicity grounds. It is explicitly *not* a performance requirement:
+  measurement showed the ping happens lazily regardless.
 - **FR-008**: The parser and the plausibility rules MUST be unit-tested, and
   the command sequence MUST be covered by functional tests against a fake
   transport that can emit degraded frames on demand.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: Opening the panel reflects device state in **under 1.5
-  seconds** (from 6.6s measured), on the reference hardware with the Solaar
-  GUI running. The observed figure is ~0.8s; the criterion carries headroom
-  for contention rather than asserting the best case.
+- **SC-001**: Opening the panel reflects device state in **at most a third
+  of the time 1.0.0 takes, measured interleaved** — the two paths alternating
+  within the same minute, so both meet the same device conditions. Observed:
+  6.6s against 2.0s. An absolute figure is not used as the criterion, because
+  the same code measures 0.75s or 2.1s depending on how responsive the
+  wireless devices happen to be, and that is not something this feature
+  controls.
 
-  *The first draft set this at "under 3 seconds". That was written before
-  the stage timings above and is about four times too conservative — it
-  would have been met by a change that left the two-second spin loop in
-  place, which is the entire finding.*
+  *This criterion has been wrong twice. The first draft said "under 3
+  seconds", written from call counts before anything was timed. The second
+  said "under 1.5 seconds", written from a measurement taken in an
+  unusually responsive window and not reproduced. A ratio under matched
+  conditions is the only form that has survived contact with the hardware.*
 - **SC-002**: Device discovery no longer costs 10.5 seconds; there is no
   `solaar show` in the data path, and the device list arrives from the same
   single call as everything else.

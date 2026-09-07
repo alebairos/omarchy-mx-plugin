@@ -30,8 +30,9 @@ Solaar GUI both running, so contention is included rather than excluded:
 | Device construction dominates | `list(receiver)` 2136 / 2137 / 2139 ms — a 3ms spread, so a fixed timeout |
 | The timeout cannot ever succeed here | `find_paired_node(idx, 1s)` → 1001ms, `None`; at 0s → 1ms, `None` |
 | One udev scan is enough | a single full scan measures 52ms |
-| `ping()` is redundant and expensive | 590–890ms per device, re-establishing what the next read establishes |
-| The whole read, both costs removed | 733, 734, 761, 796, 804, 1303 ms — byte-identical data |
+| ~~`ping()` is redundant and expensive~~ **withdrawn** | one ping per device happens either way (counted); interleaved runs put both orderings within noise |
+| One call vs 1.0.0's panel open, interleaved | 2185/1874/2096 ms against 6475/6832/6626 ms — **3.2x** |
+| Absolute timings are not stable | the same code measures 715–804ms or 1874–2185ms with device responsiveness; pausing the Solaar GUI changes nothing |
 
 ---
 
@@ -44,13 +45,13 @@ widget still uses the old paths until Phase C.
 - [ ] T001 Create `mx-device` with subcommands `state` and `set`, emitting JSON per plan.md's contract
 - [ ] T002 Enumerate through a `low_level` shim overriding only `find_paired_node`, with a one-scan budget; comment the trade-off and cite the 52ms measurement
 - [ ] T003 Read name, battery, backlight mode, level, level count, effect and supported effects for every paired device in the single `state` call
-- [ ] T004 Omit the liveness `ping()`; let the first `feature_request` be the liveness test, and route its failure into the plausibility layer
+- [ ] T004 Omit the explicit liveness `ping()` on simplicity grounds, and route a failed first read into the plausibility layer. Claim no speed-up: the ping happens lazily via `Device.protocol` either way
 - [ ] T005 Implement the plausibility invariants from plan.md in one place, with the retry budget sized to the real contention window
 - [ ] T006 Distinguish `no-receiver` / `no-devices` / `unreadable` / `rejected` in the error payload (FR-004) — the 1.0.0 bug is this distinction's absence
 - [ ] T007 Implement `set` for level, effect and mode, returning `{"ok":true}` without a confirming read (FR-002)
 - [ ] T008 [P] Keep `mx-backlight-effect` in place and untouched, so `main` stays installable and 1.0.0's path is unaffected
 - [ ] T009 Verify by hand against the hardware: `mx-device state` matches `solaar show` for both reference devices, field by field
-- [ ] T010 Time `mx-device state` over at least six runs and record the numbers in the commit message
+- [ ] T010 Time `mx-device state` **interleaved with the 1.0.0 path**, alternating within the same minute, and record both columns — absolute timings taken minutes apart are not comparable on this hardware
 
 **Checkpoint**: `mx-device state` is correct and under 1.5s, and nothing
 the user runs has changed yet.
