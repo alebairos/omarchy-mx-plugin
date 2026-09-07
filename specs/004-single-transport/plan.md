@@ -23,10 +23,12 @@ depended upon in 1.0.0 for effects; this widens that surface.
 functional tests against a fake transport that can emit degraded frames.
 Manual acceptance per feature 001's `quickstart.md`.
 
-**Performance goal**: panel open under 1.5s (from 6.6s measured; ~0.8s
-observed); no 10.5s enumeration. See the spec's stage timings — most of the
-win is removing `find_paired_node`'s one-second-per-device busy-wait, not
-merging call sites.
+**Performance goal**: panel open at most a third of 1.0.0's, measured
+interleaved so both paths meet the same device conditions (observed 6.6s vs
+2.0s); no 10.5s enumeration. Absolute timings are not a goal — the same code
+measures 0.75s or 2.1s depending on how responsive the wireless devices are.
+Most of the win is removing `find_paired_node`'s one-second-per-device
+busy-wait, not merging call sites.
 
 **Constraints**: no daemon (Principle V); no direct HID++ (Principle II —
 using Solaar's own library satisfies this, as established in feature 003).
@@ -83,15 +85,30 @@ reason this is worth 8x rather than 2x:
    shim is the smallest possible override — one function — precisely because
    Risk 1 below says this API has no stability promise.
 
-2. **The redundant ping.** `ping()` costs 590–890ms and establishes
-   liveness that the very next `feature_request` establishes anyway. A read
-   that fails is already handled by the plausibility layer; a ping only
-   moves that failure earlier at full price.
+2. **~~The redundant ping.~~ Withdrawn.** This slot held a second claimed
+   saving of ~950ms from not calling `ping()`. Building it disproved it:
+   `Device.protocol` pings lazily on first use, so exactly one ping per
+   device happens either way, and interleaved runs put the two orderings
+   within noise. The transport still does not call `ping()` explicitly —
+   a ping whose result the next read re-establishes is one more thing that
+   can fail — but that is a simplicity argument and the plan should not
+   have banked a number on it.
 
-Both are behaviour-preserving here — the shimmed path returned byte-identical
-config, state, battery and name data — and both must be covered by a
-fixture-backed test, so a future `logitech_receiver` that changes either one
-fails loudly rather than silently costing two seconds again.
+The probe fix is behaviour-preserving here (the shimmed path returned
+byte-identical config, state, battery and name data) and must be covered by
+a fixture-backed test, so a future `logitech_receiver` that reinstates the
+one-second budget fails loudly rather than silently costing two seconds
+again.
+
+### What is left, and is not ours
+
+After the probe fix, the remaining cost is per-device HID++ round trips:
+~700–850ms of ping plus ~90ms of name and battery, per device, when the
+devices are sluggish, and as little as ~15ms when they are not. Pausing the
+Solaar GUI made no difference, so this is the radio, not contention. It sets
+a floor this feature cannot lower without a persistent connection, which
+Principle V forbids. Saying so here is the point: the next person to look at
+a 2s reading should not go hunting for a bug in this code.
 
 ### Plausibility, in one place
 
