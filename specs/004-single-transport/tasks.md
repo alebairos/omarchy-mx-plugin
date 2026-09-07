@@ -42,16 +42,16 @@ Solaar GUI both running, so contention is included rather than excluded:
 any QML depends on it. Nothing in this phase changes what users run: the
 widget still uses the old paths until Phase C.
 
-- [ ] T001 Create `mx-device` with subcommands `state` and `set`, emitting JSON per plan.md's contract
-- [ ] T002 Enumerate through a `low_level` shim overriding only `find_paired_node`, with a one-scan budget; comment the trade-off and cite the 52ms measurement
-- [ ] T003 Read name, battery, backlight mode, level, level count, effect and supported effects for every paired device in the single `state` call
-- [ ] T004 Omit the explicit liveness `ping()` on simplicity grounds, and route a failed first read into the plausibility layer. Claim no speed-up: the ping happens lazily via `Device.protocol` either way
-- [ ] T005 Implement the plausibility invariants from plan.md in one place, with the retry budget sized to the real contention window
-- [ ] T006 Distinguish `no-receiver` / `no-devices` / `unreadable` / `rejected` in the error payload (FR-004) — the 1.0.0 bug is this distinction's absence
-- [ ] T007 Implement `set` for level, effect and mode, returning `{"ok":true}` without a confirming read (FR-002)
-- [ ] T008 [P] Keep `mx-backlight-effect` in place and untouched, so `main` stays installable and 1.0.0's path is unaffected
-- [ ] T009 Verify by hand against the hardware: `mx-device state` matches `solaar show` for both reference devices, field by field
-- [ ] T010 Time `mx-device state` **interleaved with the 1.0.0 path**, alternating within the same minute, and record both columns — absolute timings taken minutes apart are not comparable on this hardware
+- [x] T001 Create `mx-device` with subcommands `state` and `set`, emitting JSON per plan.md's contract
+- [x] T002 Enumerate through a `low_level` shim overriding only `find_paired_node`, with a one-scan budget; comment the trade-off and cite the 52ms measurement
+- [x] T003 Read name, battery, backlight mode, level, level count, effect and supported effects for every paired device in the single `state` call
+- [x] T004 Omit the explicit liveness `ping()` on simplicity grounds, and route a failed first read into the plausibility layer. Claim no speed-up: the ping happens lazily via `Device.protocol` either way
+- [x] T005 Implement the plausibility invariants from plan.md in one place, with the retry budget sized to the real contention window
+- [x] T006 Distinguish `no-receiver` / `no-devices` / `unreadable` / `rejected` in the error payload (FR-004) — the 1.0.0 bug is this distinction's absence
+- [x] T007 Implement `set` for level, effect and mode, returning `{"ok":true}` without a confirming read (FR-002)
+- [x] T008 [P] Keep `mx-backlight-effect` in place and untouched, so `main` stays installable and 1.0.0's path is unaffected
+- [x] T009 Verify by hand against the hardware: `mx-device state` matches `solaar show` for both reference devices, field by field
+- [x] T010 Time `mx-device state` **interleaved with the 1.0.0 path**, alternating within the same minute, and record both columns — absolute timings taken minutes apart are not comparable on this hardware
 
 **Checkpoint**: `mx-device state` is correct and under 1.5s, and nothing
 the user runs has changed yet.
@@ -63,19 +63,36 @@ the user runs has changed yet.
 **Purpose**: The 1.0.0 bug class must be reproducible in the suite before
 the QML is allowed to depend on the new path.
 
-- [ ] T011 Capture real `mx-device state` responses as `tests/fixtures/*.json` for: keyboard+mouse, mouse only, no devices, no receiver
-- [ ] T012 [P] Diff those against the retained `solaar show` fixtures and record any field the transport does not reproduce (plan.md, Risk 2)
-- [ ] T013 Redact serials from every captured fixture before committing — this repo has shipped a real serial once already
-- [ ] T014 Port the `Model.js` parser tests from scraped text to JSON
-- [ ] T015 Add degraded-frame fixtures for all four 1.0.0 defects: write-failed-mid-refresh, all-zero effect frame, dropped read queue, missing `BACKLIGHT2` block (SC-004)
-- [ ] T016 Assert each degraded frame is retried and never surfaces as state; assert an exhausted retry reports an error distinguishable from "no device"
-- [ ] T017 Build `tests/fake-mx-device`, which records invocations and can emit degraded frames on demand
-- [ ] T018 Add a functional test asserting a user-visible action issues exactly one invocation (SC-003)
-- [ ] T019 Add a regression test pinning the two cost fixes, so a `logitech_receiver` change that reinstates them fails loudly rather than silently costing 2s
-- [ ] T020 For each test above, break the code it protects and confirm it fails; say so in the commit (AGENTS.md)
+- [x] T011 Capture real `mx-device state` responses as `tests/fixtures/*.json` for: keyboard+mouse, mouse only, no devices, no receiver
+- [x] T012 [P] Diff those against the retained `solaar show` fixtures and record any field the transport does not reproduce (plan.md, Risk 2)
+- [x] T013 Redact serials from every captured fixture before committing — this repo has shipped a real serial once already
+- [x] T014 Port the `Model.js` parser tests from scraped text to JSON
+- [x] T015 Add degraded-frame fixtures for all four 1.0.0 defects: write-failed-mid-refresh, all-zero effect frame, dropped read queue, missing `BACKLIGHT2` block (SC-004)
+- [x] T016 Assert each degraded frame is retried and never surfaces as state; assert an exhausted retry reports an error distinguishable from "no device"
+- [x] T017 Build `tests/fake-mx-device`, which records invocations and can emit degraded frames on demand
+- [x] T018 Add a functional test asserting a user-visible action issues exactly one invocation (SC-003)
+- [x] T019 Add a regression test pinning the two cost fixes, so a `logitech_receiver` change that reinstates them fails loudly rather than silently costing 2s
+- [x] T020 For each test above, break the code it protects and confirm it fails; say so in the commit (AGENTS.md)
 
 **Checkpoint**: The suite fails against the old data path and passes
 against the new one, with every 1.0.0 defect represented.
+
+**Phase B outcome**: 33 tests to 54. Every new assertion was mutation-tested
+per AGENTS.md — the probe budget, the retry, the error taxonomy and the
+`unreadable` distinction each had their implementation deliberately broken
+and the suite watched to fail.
+
+T012's answer, recorded rather than implied: `solaar show` carries firmware
+versions, serial numbers, the full HID++ feature list and key-diversion
+settings, none of which `mx-device` reproduces and none of which the widget
+reads. The fields the widget does use — index, name, battery, backlight
+mode, level, level count, effect, supported effects — all round-trip. The
+transport carrying no serials is a small improvement in its own right: this
+repository has had to redact a real one out of a fixture once already.
+
+Fixing T006 turned up a real bug while writing its test: with no receiver at
+all, the transport reported `no-devices`, conflating two of the four errors
+the feature exists to separate. Caught by the stub, not by hardware.
 
 ---
 

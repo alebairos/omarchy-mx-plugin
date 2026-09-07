@@ -71,6 +71,87 @@ function parseDevices(text) {
   return result
 }
 
+// ------------------------------------------- the mx-device transport (1.1)
+
+// Parse one `mx-device state` response into the same device shape
+// `parseDevices` produces, so the UI binds to one thing regardless of which
+// transport produced it.
+//
+// The reason this exists as a separate function rather than a tweak to the
+// text parser: scraped text cannot express "I could not read this", only
+// "this field was absent". Those are the same bytes, and 1.0.0 shipped a bug
+// because of it — a contended `solaar show` that omitted the BACKLIGHT2
+// block was indistinguishable from a keyboard that has no backlight, so the
+// widget announced there was no backlight-capable device while the keyboard
+// worked. JSON with an explicit error is what makes the two distinguishable,
+// and every field below is chosen to keep them that way.
+function parseTransportState(text) {
+  var raw
+  try {
+    raw = JSON.parse(String(text || ""))
+  } catch (e) {
+    // Unparseable output is a failed read, never an empty device list. The
+    // difference decides whether the widget says "no keyboard" or "could
+    // not read", so it must not fall through to the happy path.
+    return { ok: false, error: "unreadable", detail: "transport did not emit JSON", devices: [] }
+  }
+  if (!raw || raw.ok !== true) {
+    return {
+      ok: false,
+      error: (raw && raw.error) || "unreadable",
+      detail: (raw && raw.detail) || "",
+      devices: []
+    }
+  }
+
+  var list = raw.devices || []
+  var devices = []
+  for (var i = 0; i < list.length; i++) {
+    var d = list[i] || {}
+    var bl = d.backlight
+    devices.push({
+      name: d.name || "",
+      deviceIndex: d.index,
+      batteryPercent: typeof d.battery === "number" ? d.battery : null,
+      connected: true,
+      // A device whose backlight could not be read is NOT a device without
+      // one. `unreadable` carries that forward instead of silently reporting
+      // a loss the device never confirmed.
+      hasBacklight: !!bl,
+      unreadable: d.unreadable === true,
+      backlightMode: bl ? bl.mode : null,
+      backlightLevel: bl && typeof bl.level === "number" ? bl.level : null,
+      backlightLevels: bl && typeof bl.levels === "number" ? bl.levels : null,
+      effect: bl && typeof bl.effect === "number" ? bl.effect : null,
+      supportedEffects: bl && bl.effects ? bl.effects : []
+    })
+  }
+  return { ok: true, error: null, detail: "", devices: devices }
+}
+
+// What the widget should render, given a parsed transport response. The four
+// outcomes are deliberately distinct — collapsing any two of them is the
+// 1.0.0 bug.
+function transportStatus(parsed) {
+  if (!parsed || parsed.ok !== true) {
+    if (parsed && parsed.error === "no-receiver") return "solaar-missing"
+    if (parsed && parsed.error === "no-devices") return "no-devices"
+    return "unreadable"
+  }
+  var devices = parsed.devices || []
+  if (!devices.length) return "no-devices"
+  for (var i = 0; i < devices.length; i++) {
+    if (devices[i].hasBacklight) return "ok"
+  }
+  // Present but unreadable outranks "no keyboard here": we were told a
+  // device exists and that its backlight could not be read, which is a
+  // different sentence from "nothing on this machine has a backlight".
+  for (var j = 0; j < devices.length; j++) {
+    if (devices[j].unreadable) return "unreadable"
+  }
+  return "no-keyboard"
+}
+
 // Parse the targeted `solaar config <n> backlight` read used to re-sync
 // after a failed write.
 function parseConfigRead(text) {
@@ -282,6 +363,8 @@ function shouldTrustKeyboardLoss(hadKeyboardBefore, consecutiveMisses) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     parseDevices: parseDevices,
+    parseTransportState: parseTransportState,
+    transportStatus: transportStatus,
     parseConfigRead: parseConfigRead,
     keyboardFrom: keyboardFrom,
     otherDevices: otherDevices,

@@ -111,8 +111,15 @@ def devices():
         raise TransportError("no-receiver", f"logitech_receiver unavailable: {exc}")
 
     base = low_level()
+    infos = list(base.receivers())
+    if not infos:
+        # No receiver is not the same sentence as a receiver with nothing
+        # paired to it, and collapsing them here would undo half of FR-004
+        # at the very first branch.
+        raise TransportError("no-receiver", "no Logitech receiver found")
+
     found = []
-    for info in base.receivers():
+    for info in infos:
         rcv = receiver_module.create_receiver(base, info, setting_callback=None)
         if not rcv:
             continue

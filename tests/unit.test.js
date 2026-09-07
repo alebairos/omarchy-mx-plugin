@@ -253,3 +253,89 @@ test("a keyboard that vanishes from one read is not believed immediately", () =>
   // and the widget must say so straight away rather than stalling.
   assert.equal(M.shouldTrustKeyboardLoss(false, 1), true)
 })
+
+// ------------------------------------- the mx-device transport (feature 004)
+//
+// These cover the distinction 1.0.0 could not make. Every "degraded" case
+// below is one that actually shipped a bug, not one imagined for coverage:
+// see specs/004-single-transport/spec.md, "Consequence 1".
+
+const json = (name) => fixture(name)
+
+test("parses a captured mx-device response with a keyboard and a mouse", () => {
+  const parsed = M.parseTransportState(json("mx-device-keyboard-and-mouse.json"))
+  assert.equal(parsed.ok, true)
+  assert.equal(parsed.devices.length, 2)
+
+  const kbd = parsed.devices.find((d) => d.hasBacklight)
+  assert.equal(kbd.name, "MX Mechanical Mini")
+  assert.equal(kbd.deviceIndex, 1)
+  assert.equal(kbd.batteryPercent, 65)
+  assert.equal(kbd.backlightMode, "Manual")
+  assert.equal(kbd.backlightLevels, 8)
+  assert.deepEqual(kbd.supportedEffects, [0, 1, 2, 3, 4, 5, 6])
+
+  const mouse = parsed.devices.find((d) => !d.hasBacklight)
+  assert.equal(mouse.batteryPercent, 35)
+  assert.equal(mouse.unreadable, false)
+})
+
+test("the transport's shape feeds keyboardFrom unchanged", () => {
+  // The whole point of matching parseDevices' shape: the UI binding does not
+  // learn which transport produced its data.
+  const parsed = M.parseTransportState(json("mx-device-keyboard-and-mouse.json"))
+  const kbd = M.keyboardFrom(parsed.devices)
+  assert.equal(kbd.keyboardIndex, 1)
+  assert.equal(kbd.backlightMode, "Manual")
+  assert.equal(kbd.keyboardBattery, 65)
+})
+
+test("a keyboard whose backlight could not be read is not a keyboard without one", () => {
+  // This is the 1.0.0 bug, in one assertion. A contended read that omitted
+  // the BACKLIGHT2 block made the widget announce no backlight-capable
+  // device while the keyboard was working.
+  const parsed = M.parseTransportState(json("mx-device-keyboard-unreadable.json"))
+  assert.equal(parsed.ok, true)
+  const kbd = parsed.devices[0]
+  assert.equal(kbd.hasBacklight, false)
+  assert.equal(kbd.unreadable, true)
+  assert.equal(M.transportStatus(parsed), "unreadable")
+})
+
+test("a genuine mouse-only setup is reported as no keyboard, not as an error", () => {
+  const parsed = M.parseTransportState(json("mx-device-mouse-only.json"))
+  assert.equal(parsed.ok, true)
+  assert.equal(M.transportStatus(parsed), "no-keyboard")
+})
+
+test("each transport error keeps its own name", () => {
+  assert.equal(M.transportStatus(M.parseTransportState(json("mx-device-no-receiver.json"))), "solaar-missing")
+  assert.equal(M.transportStatus(M.parseTransportState(json("mx-device-no-devices.json"))), "no-devices")
+  assert.equal(M.transportStatus(M.parseTransportState(json("mx-device-unreadable.json"))), "unreadable")
+  assert.equal(M.transportStatus(M.parseTransportState(json("mx-device-rejected.json"))), "unreadable")
+})
+
+test("output that is not JSON is a failed read, never an empty device list", () => {
+  // The dangerous failure is the quiet one: parsing garbage into zero
+  // devices reads as "nothing is paired" and hides the keyboard.
+  const parsed = M.parseTransportState(json("mx-device-malformed.json"))
+  assert.equal(parsed.ok, false)
+  assert.equal(parsed.error, "unreadable")
+  assert.equal(M.transportStatus(parsed), "unreadable")
+})
+
+test("an empty or absent response does not read as a keyboardless machine", () => {
+  for (const input of ["", null, undefined, "null"]) {
+    const parsed = M.parseTransportState(input)
+    assert.equal(parsed.ok, false, `input ${JSON.stringify(input)} must not parse as ok`)
+    assert.equal(M.transportStatus(parsed), "unreadable")
+  }
+})
+
+test("a degraded frame never yields a zero level count the UI could believe", () => {
+  // levels=0 was the effect helper's tell for a contended read. It must not
+  // arrive as a plausible "this keyboard has one level" or "has none".
+  const parsed = M.parseTransportState(json("mx-device-unreadable.json"))
+  assert.equal(parsed.devices.length, 0)
+  assert.equal(parsed.ok, false)
+})
