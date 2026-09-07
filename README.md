@@ -154,18 +154,23 @@ this widget's entry in `~/.config/omarchy/shell.json`:
 | key | default | what it does |
 |---|---|---|
 | `defaultOnLevel` | `4` | Brightness used when switching on from fully off, before any level has been remembered. Clamped to 1–7. |
-| `refreshMinutes` | `5` | How often to re-enumerate devices. This is the expensive `solaar show` (~10s), needed only for discovery and battery, so the minimum is 1. |
+| `refreshMinutes` | `5` | How often to re-read devices in the background. Needed only to notice a device appearing, disappearing, or changing outside the panel, so the minimum is 1. |
 | `showBattery` | `true` | Set to `false` to hide battery percentages entirely. |
 
 All three are optional; omit them and the defaults apply.
 
 ## Known limitations
 
-- **Roughly 2–3 seconds per action.** Each `solaar` invocation costs about
-  2.3s on the reference hardware, and the plugin shells out rather than
-  linking against the library, so a toggle or a brightness change takes
-  about that long to reach the keyboard. The panel updates immediately; the
-  keyboard follows.
+- **Roughly two seconds per action.** The plugin runs a short-lived process
+  per action rather than holding a connection open, so a toggle or a
+  brightness change takes about that long to reach the keyboard. The panel
+  updates immediately; the keyboard follows.
+
+  Most of that is not the plugin: reaching a sleeping wireless device costs
+  most of the two seconds, and it varies with how recently the device was
+  used. Opening the panel used to cost 6.6s and enumerating devices 10.5s;
+  both are now that single call. Going below it would mean holding a
+  persistent connection, which this plugin deliberately does not do.
 - **The panel does not follow the keyboard's own keys, unless you opt in.**
   It re-reads the device when you open it, so what you see on opening is
   always current. But changing brightness with F4/F5, or the effect with the
@@ -180,18 +185,26 @@ All three are optional; omit them and the defaults apply.
 - **Effects are only exposed for keyboards that report them.** The list
   comes from the device's own capability bitmap, so a keyboard that
   advertises no effects simply gets no effect row.
-- **The brightness slider assumes eight levels until told otherwise.** The
-  device reports its real number of levels, but the maximum used for
-  clamping is only corrected once a write is rejected as out of range. On a
-  keyboard with fewer levels the slider may briefly offer one too many.
+- **Effect switching can leave the previous effect's last frame.** Changing
+  effect does not re-initialise the per-key LEDs on the reference keyboard,
+  so switching from an animated effect can leave its final frame lit instead
+  of the new effect. The plugin blanks the backlight between effects to
+  clear it, which does not work in every case.
 
 ## How it works
 
-The plugin never talks to hardware directly. Every interaction goes through
-the `solaar` CLI (`solaar show`, `solaar config … backlight`, `solaar config
-… backlight_level`). The exact commands and the output it depends on are
-documented in
-[`specs/001-mx-quick-control/contracts/solaar-cli.md`](specs/001-mx-quick-control/contracts/solaar-cli.md).
+The plugin never opens `/dev/hidraw` or implements HID++. Every interaction
+goes through `mx-device`, a small bundled transport built on
+`logitech_receiver` — Solaar's own library, from the same package this
+plugin already requires. One invocation returns everything about every
+paired device; one invocation performs a write. It speaks JSON, so a
+truncated or contended answer is a parse failure rather than a plausible
+wrong value.
+
+Before 1.1 this went through the `solaar` CLI three different ways, which
+cost six invocations to open the panel. The rewrite and the reasoning behind
+it are in
+[`specs/004-single-transport/`](specs/004-single-transport/).
 
 Two device behaviours are worth knowing if you read the code, because they
 look like bugs and are not:
