@@ -22,3 +22,7 @@ node_modules/
 # OS/editor cruft
 .DS_Store
 *.swp
+
+# Python bytecode from the bundled transport
+__pycache__/
+*.pyc

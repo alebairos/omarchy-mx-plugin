@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+"""One transport to the keyboard, speaking JSON.
+
+Replaces the three mechanisms 1.0.0 used -- `solaar show`, `solaar config`
+and `mx-backlight-effect` -- with a single invocation that returns
+everything about every paired device, and a single invocation per write.
+See specs/004-single-transport/spec.md.
+
+Usage:
+    mx-device state
+    mx-device set --device 1 --level 5
+    mx-device set --device 1 --effect 3
+    mx-device set --device 1 --mode Manual|Automatic|Disabled|Enabled
+
+Always prints one JSON object on stdout and exits 0 when it produced an
+answer, including a negative one:
+
+    {"ok": true,  "devices": [...]}
+    {"ok": false, "error": "no-receiver"|"no-devices"|"unreadable"|"rejected",
+                  "detail": "..."}
+
+The distinction between "no-devices" and "unreadable" is the point of this
+program. 1.0.0 could not tell them apart, and shipped a bug where the widget
+announced that no backlight-capable keyboard existed while the keyboard was
+working -- a single contended read that omitted a feature block was
+indistinguishable from a genuine absence.
+"""
+
+import argparse
+import json
+import struct
+import sys
+import time
+import types
+
+FN_GET_CONFIG = 0x00
+FN_SET_CONFIG = 0x10
+FN_GET_STATE = 0x20
+
+# `Device.__init__` (logitech_receiver/device.py) probes for a device's own
+# hidraw node with a one-second budget, and `find_paired_node`
+# (hidapi/udev_impl.py) spends it in a busy-wait that rescans every hidraw
+# node until it expires. For devices behind a Bolt receiver the probe cannot
+# succeed -- they are reached through the receiver's own handle and have no
+# node of their own -- so it returns None at 1s exactly as it does at 0s,
+# having burned a second per device to get there. Measured on the reference
+# hardware: 1001ms and 1002ms, against 1ms at a zero budget, and it is what
+# made `list(receiver)` cost 2136/2137/2139ms across three runs.
+#
+# A single complete scan measures 52ms, so this budget allows roughly two.
+# What it gives up is the grace period for a node that appears *during* the
+# probe; what it buys is two seconds off every invocation. A device whose
+# node genuinely exists is still found on the first scan.
+NODE_PROBE_SECONDS = 0.15
+
+# Sized against the contention this still has to survive: the Solaar GUI and
+# a user's own `solaar` commands touch the same device, and it answers
+# concurrent access with plausible, well-formed, wrong data rather than an
+# error. 1.0.0's helper budgeted nine attempts against `solaar show`'s 10.5s
+# window; that window is gone with `solaar show`, so the budget shrinks to
+# match. Exhausting it is no longer a disaster either: the caller is told
+# "unreadable" and renders that, instead of being handed a wrong state.
+READ_ATTEMPTS = 4
+READ_BACKOFF_SECONDS = 0.4
+
+MODES = {"Enabled": 0x00, "Automatic": 0x01, "Manual": 0x03, "Disabled": 0xFF}
+MODE_NAMES = {0x00: "Enabled", 0x01: "Automatic", 0x03: "Manual"}
+
+
+class TransportError(Exception):
+    """A failure with a name the widget can render differently."""
+
+    def __init__(self, error, detail=""):
+        super().__init__(detail or error)
+        self.error = error
+        self.detail = detail
+
+
+def emit(payload):
+    json.dump(payload, sys.stdout, separators=(",", ":"))
+    sys.stdout.write("\n")
+
+
+def low_level():
+    """Solaar's own `base` module, with only the node probe overridden.
+
+    Deliberately the smallest possible override. This is an internal API with
+    no stability promise (spec, Assumptions), so the less of it this program
+    reshapes, the less there is to break.
+    """
+    from logitech_receiver import base
+
+    shim = types.ModuleType("mx_device_base")
+    shim.__dict__.update(
+        {name: getattr(base, name) for name in dir(base) if not name.startswith("__")}
+    )
+    shim.find_paired_node = (
+        lambda receiver_path, index, _timeout: base.find_paired_node(
+            receiver_path, index, NODE_PROBE_SECONDS
+        )
+    )
+    return shim
+
+
+def devices():
+    """Every device the receiver reports, as (device, SupportedFeature)."""
+    try:
+        from logitech_receiver import receiver as receiver_module
+        from logitech_receiver.hidpp20_constants import SupportedFeature
+    except ImportError as exc:
+        raise TransportError("no-receiver", f"logitech_receiver unavailable: {exc}")
+
+    base = low_level()
+    found = []
+    for info in base.receivers():
+        rcv = receiver_module.create_receiver(base, info, setting_callback=None)
+        if not rcv:
+            continue
+        # No explicit ping. Not because a round trip is saved -- `.protocol`
+        # pings lazily on first use either way, and measurement showed the
+        # two orderings within noise of each other -- but because a ping
+        # whose result is immediately re-established by the following read
+        # is a second thing that can fail, in a program whose whole purpose
+        # is to have one.
+        for device in rcv:
+            if device:
+                found.append((device, SupportedFeature))
+    if not found:
+        raise TransportError("no-devices", "no paired devices behind any receiver")
+    return found
+
+
+def read_backlight(device, feature):
+    """Backlight config and state, retried until plausible.
+
+    The device does not report contention; it answers with a well-formed
+    frame of zeros. So plausibility is checked against invariants the device
+    itself supplies, and a frame failing them is retried rather than
+    returned. Every check lives here, which is the point -- 1.0.0 had four of
+    them in four places, written as four separate bug fixes.
+    """
+    last = "no reply"
+    for attempt in range(READ_ATTEMPTS):
+        config = device.feature_request(feature.BACKLIGHT2, FN_GET_CONFIG)
+        state = device.feature_request(feature.BACKLIGHT2, FN_GET_STATE)
+        if not config or not state:
+            last = "device did not reply to a backlight read"
+        elif state[0] == 0:
+            # A device advertising BACKLIGHT2 always has at least one level.
+            last = "device reported zero backlight levels"
+        else:
+            enabled, options, supported, effects, level, dho, dhi, dpow = struct.unpack(
+                "<BBBHBHHH", config[:12]
+            )
+            if effects == 0:
+                # An empty effects bitmap on a BACKLIGHT2 device is the same
+                # tell: the capability read came back degraded.
+                last = "device reported no supported effects"
+            else:
+                return {
+                    "enabled": enabled,
+                    "options": options,
+                    "supported": supported,
+                    "effects_bitmap": effects,
+                    "levels": state[0],
+                    "level": state[1],
+                    "effect": state[3],
+                    "dho": dho,
+                    "dhi": dhi,
+                    "dpow": dpow,
+                }
+        if attempt < READ_ATTEMPTS - 1:
+            time.sleep(READ_BACKOFF_SECONDS)
+    raise TransportError("unreadable", last)
+
+
+def mode_name(options, enabled):
+    if not enabled:
+        return "Disabled"
+    return MODE_NAMES.get((options >> 3) & 0x03, "Enabled")
+
+
+def describe(device, feature):
+    row = {"index": device.number, "name": device.name, "battery": None,
+           "backlight": None}
+    try:
+        battery = device.battery()
+    except Exception:
+        battery = None
+    if battery is not None:
+        row["battery"] = battery.level
+
+    if feature.BACKLIGHT2 not in device.features:
+        return row
+
+    backlight = read_backlight(device, feature)
+    row["backlight"] = {
+        "mode": mode_name(backlight["options"], backlight["enabled"]),
+        "level": backlight["level"],
+        "levels": backlight["levels"],
+        "effect": backlight["effect"],
+        "effects": [b for b in range(16) if backlight["effects_bitmap"] & (1 << b)],
+    }
+    return row
+
+
+def command_state():
+    rows = []
+    for device, feature in devices():
+        try:
+            rows.append(describe(device, feature))
+        except TransportError:
+            # One unreadable device must not erase the others. It is reported
+            # as present with no backlight detail, which the widget renders as
+            # "could not read" -- distinct from a device that is not there.
+            rows.append({"index": device.number, "name": device.name,
+                         "battery": None, "backlight": None, "unreadable": True})
+    return {"ok": True, "devices": rows}
+
+
+def find(index):
+    for device, feature in devices():
+        if device.number == index:
+            return device, feature
+    raise TransportError("no-devices", f"no device at index {index}")
+
+
+def command_set(index, level=None, effect=None, mode=None):
+    device, feature = find(index)
+
+    if mode is not None:
+        # Mirrors Solaar's own Backlight2 setting exactly, so this behaves
+        # identically to the `solaar config <n> backlight <mode>` it replaces.
+        # Note the mode values come from that setting's validator, not from
+        # its `choices_universe`, which disagrees with it: the validator uses
+        # Manual=0x3 and is what `solaar config` actually accepts.
+        backlight = device.backlight
+        if backlight is None:
+            raise TransportError("unreadable", "no backlight on that device")
+        value = MODES[mode]
+        backlight.enabled = value != 0xFF
+        if value != 0xFF:
+            backlight.mode = value
+        if backlight.write() is None:
+            raise TransportError("rejected", f"device rejected mode {mode}")
+        return {"ok": True}
+
+    if level is not None:
+        backlight = device.backlight
+        if backlight is None:
+            raise TransportError("unreadable", "no backlight on that device")
+        backlight.level = level
+        if backlight.write() is None:
+            raise TransportError("rejected", f"device rejected level {level}")
+        return {"ok": True}
+
+    # Effects. Solaar exposes no setting for these, so this is the one place
+    # the raw feature payload is assembled -- carried over unchanged from
+    # 1.0.0's mx-backlight-effect, including two behaviours calibrated on
+    # hardware and easy to regress:
+    #
+    # `enabled` is forced on rather than carried through, because effect 1 is
+    # an "off" effect: selecting it clears the enabled flag and zeroes the
+    # level, and preserving that value then wrote enabled=0 forever after,
+    # stranding the keyboard dark with no effect able to bring it back.
+    #
+    # And the off-pulse: switching effect does not re-initialise the per-key
+    # LEDs, so the keyboard stops animating on whatever frame it was on --
+    # Wave to Static gives a frozen wave. Powering the backlight down briefly
+    # first clears it; re-sending the same effect does not.
+    backlight = read_backlight(device, feature)
+    available = [b for b in range(16) if backlight["effects_bitmap"] & (1 << b)]
+    if available and effect not in available:
+        raise TransportError("rejected",
+                             f"effect {effect} not supported (has {available})")
+
+    level_out = backlight["level"] or 1
+    common = (backlight["options"], effect)
+    tail = (backlight["dho"], backlight["dhi"], backlight["dpow"])
+    off = struct.pack("<BBBBHHH", 0, *common, 0, *tail)
+    on = struct.pack("<BBBBHHH", 1, *common, level_out, *tail)
+
+    device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, off)
+    time.sleep(0.2)
+    if device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, on) is None:
+        raise TransportError("rejected", f"device rejected effect {effect}")
+    return {"ok": True}
+
+
+def main():
+    parser = argparse.ArgumentParser(add_help=True, description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    sub.add_parser("state")
+    setter = sub.add_parser("set")
+    setter.add_argument("--device", type=int, required=True)
+    group = setter.add_mutually_exclusive_group(required=True)
+    group.add_argument("--level", type=int)
+    group.add_argument("--effect", type=int)
+    group.add_argument("--mode", choices=sorted(MODES))
+    args = parser.parse_args()
+
+    try:
+        if args.command == "state":
+            emit(command_state())
+        else:
+            emit(command_set(args.device, args.level, args.effect, args.mode))
+    except TransportError as exc:
+        emit({"ok": False, "error": exc.error, "detail": exc.detail})
+    except Exception as exc:  # never emit a traceback where JSON is expected
+        emit({"ok": False, "error": "unreadable", "detail": f"{type(exc).__name__}: {exc}"})
+
+
+if __name__ == "__main__":
+    main()
