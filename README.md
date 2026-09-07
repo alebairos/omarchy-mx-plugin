@@ -185,11 +185,14 @@ All three are optional; omit them and the defaults apply.
 - **Effects are only exposed for keyboards that report them.** The list
   comes from the device's own capability bitmap, so a keyboard that
   advertises no effects simply gets no effect row.
-- **Effect switching can leave the previous effect's last frame.** Changing
-  effect does not re-initialise the per-key LEDs on the reference keyboard,
-  so switching from an animated effect can leave its final frame lit instead
-  of the new effect. The plugin blanks the backlight between effects to
-  clear it, which does not work in every case.
+- **Effect switching can occasionally leave the previous effect's last
+  frame.** Changing effect does not re-initialise the per-key LEDs on the
+  reference keyboard, so switching from an animated effect can leave its
+  final frame lit instead of the new one. The plugin blanks the backlight
+  between effects to clear this, and that usually works — Wave to Static has
+  since been exercised many times without recurring. It has been seen to
+  fail at least once, and has not been reproducible on demand since, so it
+  is recorded here rather than claimed fixed.
 
 ## How it works
 

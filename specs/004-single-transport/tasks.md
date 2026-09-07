@@ -159,14 +159,29 @@ tip: `git revert` of the Phase C commit, pushed to `main`, then
 never be a history rewrite, and it is now known to work rather than believed
 to.
 
-**Open regression**: switching from an animated effect (Wave) to Static can
-leave the previous effect's last frame lit. 1.0.0 mitigated this by blanking
-the backlight between effects; that mitigation is not sufficient. Register
-state is correct in every case — the device reports the new effect at the
-right level — so this is visible only to a human, and is being calibrated
-per `specs/research/hitl-calibration.md`. Lengthening the blanking pulse to
-0.5s and 1.0s did not help, which rules out the timing hypothesis. Recorded
-in the README as a known limitation until it is fixed.
+**Open, intermittent**: switching from an animated effect (Wave) to Static
+was once observed leaving the previous effect's last frame lit. It has not
+reproduced since, across many switches in both directions on the shipped
+code — which is unchanged, so nothing about it was fixed.
+
+What the investigation established, so the next person does not repeat it:
+
+- Register state is correct in every variant tried. The device reports the
+  new effect at the right level, which is why no test catches this and only
+  a human can.
+- The payloads are byte-identical to 1.0.0's `mx-backlight-effect`, diffed
+  against the `v1.0.0` tag. This is not a wrong write.
+- It is not the blanking duration. 0.5s and 1.0s were tried and neither
+  changed the outcome while the fault was live.
+- The device does not apply an effect change while disabled: after the
+  blanking write, `GET_STATE` still reports the *old* effect. The change
+  lands on the write that powers the backlight back on, which is the moment
+  the LED buffer would need re-initialising. That is the most promising
+  thread if it recurs.
+
+`EFFECT_RESET_PULSE_SECONDS` is overridable via `MX_EFFECT_PULSE` so the
+next calibration run costs one command, per
+`specs/research/hitl-calibration.md`.
 
 ---
 
