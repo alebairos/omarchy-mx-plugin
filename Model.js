@@ -13,64 +13,6 @@
 
 // ---------------------------------------------------------------- parsing
 
-// Parse `solaar show` output into one entry per paired device.
-//
-// The trap this exists to survive: every BACKLIGHT2 field is printed twice,
-// once as "Backlight Level (saved): 3" and once as the live
-// "Backlight Level        : 0". They routinely disagree — the saved value is
-// what solaar remembers, the live value is what the hardware is actually
-// doing — and reading the wrong one is why the keyboard once sat dark while
-// everything claimed it was lit. The regexes below require whitespace right
-// up to the colon, which the "(saved)" variant cannot match.
-function parseDevices(text) {
-  var lines = String(text || "").split("\n")
-  var result = []
-  var current = null
-  var inBacklight2 = false
-
-  for (var i = 0; i < lines.length; i++) {
-    var line = lines[i]
-
-    var deviceMatch = line.match(/^\s{2}(\d+):\s+(.+?)\s*$/)
-    if (deviceMatch) {
-      if (current) result.push(current)
-      current = {
-        name: deviceMatch[2],
-        deviceIndex: parseInt(deviceMatch[1], 10),
-        batteryPercent: null,
-        connected: true,
-        hasBacklight: false,
-        backlightMode: null,
-        backlightLevel: null
-      }
-      inBacklight2 = false
-      continue
-    }
-    if (!current) continue
-
-    var batteryMatch = line.match(/Battery:\s*(\d+)%/)
-    if (batteryMatch) current.batteryPercent = parseInt(batteryMatch[1], 10)
-
-    if (line.indexOf("BACKLIGHT2") !== -1) {
-      current.hasBacklight = true
-      inBacklight2 = true
-      continue
-    }
-    // A new numbered HID++ feature line ends the BACKLIGHT2 block.
-    if (inBacklight2 && /^\s{8}\d+:\s/.test(line) && line.indexOf("BACKLIGHT2") === -1) {
-      inBacklight2 = false
-    }
-    if (inBacklight2) {
-      var modeMatch = line.match(/Backlight\s+:\s*(\w+)/)
-      if (modeMatch) current.backlightMode = modeMatch[1]
-      var levelMatch = line.match(/Backlight Level\s+:\s*(\d+)/)
-      if (levelMatch) current.backlightLevel = parseInt(levelMatch[1], 10)
-    }
-  }
-  if (current) result.push(current)
-  return result
-}
-
 // ------------------------------------------- the mx-device transport (1.1)
 
 // Parse one `mx-device state` response into the same device shape
@@ -150,18 +92,6 @@ function transportStatus(parsed) {
     if (devices[j].unreadable) return "unreadable"
   }
   return "no-keyboard"
-}
-
-// Parse the targeted `solaar config <n> backlight` read used to re-sync
-// after a failed write.
-function parseConfigRead(text) {
-  var s = String(text || "")
-  var out = { mode: null, level: null }
-  var modeMatch = s.match(/backlight\s*=\s*(\w+)/)
-  if (modeMatch) out.mode = modeMatch[1]
-  var levelMatch = s.match(/backlight_level\s*=\s*(\d+)/)
-  if (levelMatch) out.level = parseInt(levelMatch[1], 10)
-  return out
 }
 
 // The first backlight-capable device, flattened into the shape the UI binds
@@ -260,30 +190,6 @@ function learnLevelMax(stderrText, attemptedLevel) {
 
 // ------------------------------------------------------- backlight effects
 
-// Parse the helper's `get` line:
-//   "levels=8 level=3 effect=6 supported=0,1,2,3,4,5,6"
-// Returns effect -1 and an empty list when the line is unusable, so a caller
-// can hide the control rather than offer values the device would reject.
-function parseEffectState(text) {
-  var s = String(text || "")
-  var out = { levels: 0, level: 0, effect: -1, supported: [] }
-  var m
-
-  m = s.match(/levels=(\d+)/);        if (m) out.levels = parseInt(m[1], 10)
-  m = s.match(/\blevel=(\d+)/);      if (m) out.level = parseInt(m[1], 10)
-  m = s.match(/effect=(\d+)/);        if (m) out.effect = parseInt(m[1], 10)
-  m = s.match(/supported=([0-9,]+)/)
-  if (m) {
-    var parts = m[1].split(",")
-    for (var i = 0; i < parts.length; i++) {
-      if (parts[i] === "") continue
-      var v = parseInt(parts[i], 10)
-      if (!isNaN(v)) out.supported.push(v)
-    }
-  }
-  return out
-}
-
 // The effect after this one, wrapping. Cycling is how the keyboard's own key
 // behaves, so the panel matches it.
 function nextEffect(current, supported, delta) {
@@ -362,10 +268,8 @@ function shouldTrustKeyboardLoss(hadKeyboardBefore, consecutiveMisses) {
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
-    parseDevices: parseDevices,
     parseTransportState: parseTransportState,
     transportStatus: transportStatus,
-    parseConfigRead: parseConfigRead,
     keyboardFrom: keyboardFrom,
     otherDevices: otherDevices,
     isOn: isOn,
@@ -374,7 +278,6 @@ if (typeof module !== "undefined" && module.exports) {
     planSetLevel: planSetLevel,
     planToggle: planToggle,
     learnLevelMax: learnLevelMax,
-    parseEffectState: parseEffectState,
     selectableEffects: selectableEffects,
     excludedEffects: excludedEffects,
     nextEffect: nextEffect,

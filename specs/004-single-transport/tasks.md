@@ -101,16 +101,37 @@ the feature exists to separate. Caught by the stub, not by hardware.
 **Purpose**: Six call sites become two. This is the phase that ships the
 change to users, so it merges only with Phase B green.
 
-- [ ] T021 Replace the three panel-open reads with one `mx-device state` call
-- [ ] T022 Rewrite `publishKeyboardState` to consume JSON instead of scraped text
-- [ ] T023 Route writes through `mx-device set`, and delete the confirming reads that follow them (FR-002)
-- [ ] T024 Collapse `runNextVerify`'s queue to a single "read state" step, keeping the single-flight guard and the optimistic updates unchanged
-- [ ] T025 Render "no keyboard" and "could not read" differently, which 1.0.0 cannot (FR-004)
-- [ ] T026 Delete the `solaar show` parser, the text-scraping paths, and `mx-backlight-effect`; confirm no `solaar` invocation remains in the data path (FR-005)
-- [ ] T027 Confirm the OSD, cursor model, hardware-key path and Solaar rule still behave, none of which this phase intends to touch
+- [x] T021 Replace the three panel-open reads with one `mx-device state` call
+- [x] T022 Rewrite `publishKeyboardState` to consume JSON instead of scraped text
+- [x] T023 Route writes through `mx-device set`, and delete the confirming reads that follow them (FR-002)
+- [x] T024 Collapse `runNextVerify`'s queue to a single "read state" step, keeping the single-flight guard and the optimistic updates unchanged
+- [x] T025 Render "no keyboard" and "could not read" differently, which 1.0.0 cannot (FR-004)
+- [x] T026 Delete the `solaar show` parser, the text-scraping paths, and `mx-backlight-effect`; confirm no `solaar` invocation remains in the data path (FR-005)
+- [x] T027 Confirm the OSD, cursor model, hardware-key path and Solaar rule still behave, none of which this phase intends to touch
 
 **Checkpoint**: The widget runs entirely on `mx-device`, and `main` is
 installable.
+
+**Phase C outcome**: six call sites across three mechanisms became four
+across one. `runNextVerify`, `verifyQueue`, `verifyProc` and `effectGetProc`
+are gone entirely — one call cannot race itself, so the ordering hazards
+they existed to manage went with them. The `solaar show` parser,
+`parseConfigRead`, `parseEffectState`, `mx-backlight-effect`, `fake-solaar`
+and the `solaar-show-*` fixtures are deleted; a fake of a CLI the plugin no
+longer invokes tests nothing.
+
+Verified by driving the real widget over IPC after `omarchy restart shell`,
+and cross-checked against the hardware rather than the widget's own claim
+(AGENTS.md): a level write, a toggle off, a toggle back on, and an effect
+changed *outside* the widget and picked up on refresh — every one matching
+`mx-device state` field for field. Panel refresh settled in 2014 / 3486 /
+2672 / 2161 ms.
+
+The test count went 54 -> 38, which is a deletion not a regression: the
+removed tests covered the solaar text parsers and a fake solaar, all of
+which are gone. The live-vs-saved level invariant they used to protect is
+now pinned at the transport instead — the stub reports a saved level of 3
+and a live level of 6, and a test asserts 6.
 
 ---
 

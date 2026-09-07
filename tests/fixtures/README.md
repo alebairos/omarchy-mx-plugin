@@ -1,7 +1,10 @@
 # Fixtures
 
-`solaar-show-*.txt` are captured `solaar show` output, from 1.0.0's data path.
-`mx-device-*.json` are `mx-device` responses, from 1.1's.
+`mx-device-*.json` are `mx-device` responses. The `solaar-show-*.txt`
+fixtures that used to sit beside them went with the text parser in phase C:
+the plugin no longer invokes `solaar`, so a fixture of its output tests
+nothing. They remain in git history at the `v1.0.0` tag if the old parser
+ever needs re-reading.
 
 Only one of the JSON fixtures is *captured* from the reference hardware:
 `mx-device-keyboard-and-mouse.json`. The rest are **constructed** against the

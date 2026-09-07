@@ -1,3 +1,0 @@
-Traceback (most recent call last):
-  File "/usr/bin/solaar", line 8
-RuntimeError: cannot open device

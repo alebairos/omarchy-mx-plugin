@@ -96,11 +96,18 @@ Panel {
   // touching /dev/hidraw. See specs/003-backlight-effects/spec.md.
   property int effectIndex: -1
   property var effectsSupported: []
+  // Every device call goes through this one bundled transport (feature 004).
+  // It replaces `solaar show`, `solaar config` and mx-backlight-effect: one
+  // invocation returns everything about every device, one performs a write.
+  readonly property string transport: String(Qt.resolvedUrl("mx-device")).replace("file://", "")
+  // What the last read actually said, kept apart from "no keyboard" -- see
+  // Model.transportStatus. 1.0.0 could not tell a failed read from an absent
+  // keyboard, and announced the latter when it meant the former.
+  property string readStatus: "ok"
   // What the panel actually offers: the device's supported set minus the
   // "off" effect, which the backlight toggle already owns (see Model.js).
   readonly property var effectsSelectable: Model.selectableEffects(effectsSupported)
   readonly property bool effectsAvailable: effectsSelectable.length > 0
-  readonly property string effectHelper: String(Qt.resolvedUrl("mx-backlight-effect")).replace("file://", "")
 
   readonly property var otherDevices: {
     var list = []
@@ -120,6 +127,9 @@ Panel {
   // Empty string means "there is a keyboard and all is well".
   readonly property string unavailableReason: {
     if (!solaarAvailable) return "solaar-missing"
+    // A read that failed is its own answer. Falling through to
+    // "no-backlight-device" here is precisely the 1.0.0 bug.
+    if (readStatus === "unreadable") return "unreadable"
     if (devices.length === 0) return "no-devices"
     if (!hasKeyboard) return "no-backlight-device"
     return ""
@@ -130,6 +140,7 @@ Panel {
     case "solaar-missing": return "Solaar is not installed"
     case "no-devices": return "No Logitech devices detected"
     case "no-backlight-device": return "No backlight-capable keyboard"
+    case "unreadable": return "Could not read the keyboard"
     default: return ""
     }
   }
@@ -142,6 +153,8 @@ Panel {
       return "Solaar is installed but reports no paired devices.\nCheck the receiver is plugged in and the device is switched on."
     case "no-backlight-device":
       return "Paired devices were found, but none report a backlight.\nBattery status is shown below."
+    case "unreadable":
+      return "The keyboard is there but did not answer.\nThis usually clears on its own; another program may be talking to it."
     default: return ""
     }
   }
@@ -158,9 +171,11 @@ Panel {
   // busy. The effect helper was missing from this list, which let it run
   // concurrently with a solaar CLI call -- both then got degraded answers,
   // and the panel's re-read on open was dropped entirely.
+  // Still a single-flight guard: the transport removed our own extra
+  // invocations, but it cannot stop the Solaar GUI or a user's own `solaar`
+  // command from touching the device at the same moment.
   readonly property bool solaarBusy: statusProc.running || modeProc.running
-    || levelProc.running || verifyProc.running
-    || effectGetProc.running || effectSetProc.running
+    || levelProc.running || effectSetProc.running
 
   function refresh() {
     if (solaarBusy) return
@@ -177,12 +192,29 @@ Panel {
       var d = devices[i]
       if (!d.hasBacklight) continue
       keyboardMisses = 0
+      var levelMoved = d.backlightLevel !== null && d.backlightLevel !== backlightLevel
       keyboardIndex = d.deviceIndex
       keyboardName = d.name
       backlightMode = d.backlightMode !== null ? d.backlightMode : ""
       backlightLevel = d.backlightLevel !== null ? d.backlightLevel : 0
       keyboardBattery = d.batteryPercent !== null ? d.batteryPercent : -1
       if (backlightLevel > 0) lastOnLevel = backlightLevel
+
+      // The same read carries the effect, the live level and the level
+      // count, so what used to need a second and third call is already here.
+      var effectMoved = d.effect !== null && d.effect !== effectIndex
+      if (d.effect !== null) effectIndex = d.effect
+      effectsSupported = d.supportedEffects || []
+      if (effectMoved && announceExternalChange) showEffectOsd(effectIndex)
+      if (levelMoved && announceExternalChange) showBacklightOsd(backlightLevel)
+
+      // The device reports how many levels it has, so the slider maximum is
+      // read rather than assumed and then corrected by a rejected write.
+      if (d.backlightLevels > 1) {
+        var m = levelMaxByDevice
+        m[keyboardIndex] = d.backlightLevels - 1
+        levelMaxByDevice = m
+      }
       return
     }
     // No backlight device in this read. That is usually contention rather
@@ -277,7 +309,7 @@ Panel {
     }
     modeProc.pendingLevel = thenLevel
     modeProc.pendingDeviceIndex = deviceIndex
-    modeProc.command = ["solaar", "config", String(deviceIndex), "backlight", mode]
+    modeProc.command = [root.transport, "set", "--device", String(deviceIndex), "--mode", mode]
     modeProc.running = true
   }
 
@@ -295,45 +327,13 @@ Panel {
     Qt.callLater(function() { root.refreshBacklight() })
   }
 
-  // Re-read just the backlight fields, one targeted `solaar config` call per
-  // field (~2.3s each) instead of the ~10.5s full device enumeration. Used
-  // when the panel opens, and after a write that failed.
-  property var verifyQueue: []
-
-  // One queue drives every read, executed strictly one at a time. Running
-  // them concurrently is what made the device answer with zeros.
+  // Re-read everything. This was a three-call queue -- mode, level, effect --
+  // executed strictly one at a time because running them concurrently made
+  // the device answer with zeros. One call cannot race itself, so the queue
+  // and its ordering hazards are gone with it.
   function refreshBacklight() {
     if (!hasKeyboard) return
-    verifyQueue = ["backlight", "backlight_level", "effect"]
-    runNextVerify()
-  }
-
-  function runNextVerify() {
-    // Deliberately does NOT clear announceExternalChange here. A Process's
-    // onExited and its StdioCollector's onStreamFinished fire in no
-    // guaranteed order, so clearing when the queue empties raced the last
-    // read's own handler -- the effect read, being last, lost that race and
-    // its OSD never appeared while the level's (never last) always did.
-    // The flag is cleared where a read is known NOT to be announcing:
-    // opening the panel.
-    if (verifyQueue.length === 0) return
-    if (solaarBusy) {
-      // Wait for the device rather than giving up. Dropping the queue here
-      // is why opening the panel could silently fail to refresh: any call
-      // still in flight at that moment discarded the whole re-read, leaving
-      // a level on screen that the keyboard had long since moved past.
-      Qt.callLater(runNextVerify)
-      return
-    }
-    var next = verifyQueue[0]
-    verifyQueue = verifyQueue.slice(1)
-    if (next === "effect") {
-      effectGetProc.command = [effectHelper, "get"]
-      effectGetProc.running = true
-      return
-    }
-    verifyProc.command = ["solaar", "config", String(keyboardIndex), next]
-    verifyProc.running = true
+    refresh()
   }
 
   // Replay whatever was deferred while solaar was busy. Mode first: a queued
@@ -373,28 +373,40 @@ Panel {
     }
     levelProc.targetDeviceIndex = deviceIndex
     levelProc.targetLevel = level
-    levelProc.command = ["solaar", "config", String(deviceIndex), "backlight_level", String(level)]
+    levelProc.command = [root.transport, "set", "--device", String(deviceIndex), "--level", String(level)]
     levelProc.running = true
   }
 
   // Parsing lives in Model.js so it can be unit-tested without a shell.
-  function parseStatus(text) {
-    return Model.parseDevices(text)
+  function applyTransportState(text) {
+    var parsed = Model.parseTransportState(text)
+    root.readStatus = Model.transportStatus(parsed)
+    root.solaarAvailable = parsed.error !== "no-receiver"
+
+    if (!parsed.ok) {
+      // A failed read is not news about the hardware. Tearing down state on
+      // the strength of one is how 1.0.0 came to announce that no
+      // backlight-capable keyboard existed while the keyboard was working,
+      // so the last known-good values stay on screen and unavailableReason
+      // says which of the two this is.
+      if (parsed.error === "no-devices") root.devices = []
+      return
+    }
+    root.devices = parsed.devices
+    root.publishKeyboardState()
   }
 
   Process {
     id: statusProc
-    command: ["solaar", "show"]
+    command: [root.transport, "state"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: {
-        root.solaarAvailable = true
-        root.devices = root.parseStatus(text)
-        root.publishKeyboardState()
-        root.refreshEffect()
-      }
+      onStreamFinished: root.applyTransportState(text)
     }
     onExited: function(exitCode) {
+      // The transport reports failure in its JSON and still exits 0, so a
+      // non-zero exit means it could not run at all -- missing, not
+      // executable, no interpreter.
       if (exitCode !== 0) {
         root.solaarAvailable = false
         root.devices = []
@@ -478,53 +490,6 @@ Panel {
     }
   }
 
-  // `solaar show` enumerates every device and costs ~10.5s on this hardware,
-  // against ~2.3s for a targeted `solaar config` read (measured). It is only
-  // needed to discover devices and read battery, neither of which changes
-  // quickly, so it runs on a slow timer instead of after every interaction.
-  Process {
-    id: effectGetProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var st = Model.parseEffectState(text)
-        root.effectsSupported = st.supported
-        if (st.effect >= 0) {
-          var effectMoved = st.effect !== root.effectIndex
-          root.effectIndex = st.effect
-          if (effectMoved && root.announceExternalChange) root.showEffectOsd(st.effect)
-        }
-        // This one read reports the level as well, so a change made with the
-        // keyboard's own keys is picked up here without a second call.
-        if (st.levels > 1 && st.level !== root.backlightLevel) {
-          var levelMoved = true
-          root.backlightLevel = st.level
-          if (st.level > 0) root.lastOnLevel = st.level
-          if (levelMoved && root.announceExternalChange) root.showBacklightOsd(st.level)
-        }
-        // The device reports how many levels it has, so the slider's
-        // maximum is read rather than assumed. It used to default to 7 and
-        // only get corrected when a write was rejected as out of range,
-        // which meant a keyboard with fewer levels offered one too many
-        // until the user found the edge by hitting it.
-        if (st.levels > 1) {
-          var m = root.levelMaxByDevice
-          m[root.keyboardIndex] = st.levels - 1
-          root.levelMaxByDevice = m
-        }
-      }
-    }
-    onExited: function(exitCode) {
-      // Any failure (no solaar library, no device, older keyboard) simply
-      // means no effect row -- the rest of the widget is unaffected.
-      if (exitCode !== 0) {
-        root.effectsSupported = []
-        root.effectIndex = -1
-      }
-      Qt.callLater(root.runNextVerify)
-    }
-  }
-
   Process {
     id: effectSetProc
     onExited: function(exitCode) {
@@ -548,30 +513,6 @@ Panel {
     repeat: true
     triggeredOnStart: true
     onTriggered: root.refresh()
-  }
-
-  // A write that failed left the device in an unknown state, so re-read the
-  // backlight fields -- targeted, not the full enumeration.
-  Process {
-    id: verifyProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var r = Model.parseConfigRead(text)
-        if (r.mode !== null) root.backlightMode = r.mode
-        if (r.level !== null) {
-          var moved = r.level !== root.backlightLevel
-          root.backlightLevel = r.level
-          if (r.level > 0) root.lastOnLevel = r.level
-          if (moved && root.announceExternalChange) root.showBacklightOsd(r.level)
-        }
-      }
-    }
-    onExited: function(exitCode) {
-      // Chain the next targeted read, deferred so `running` has settled --
-      // the same hazard as drainQueued().
-      Qt.callLater(root.runNextVerify)
-    }
   }
 
   IpcHandler {
@@ -687,14 +628,16 @@ Panel {
     if (!effectsAvailable || index === effectIndex) return
     effectIndex = index                       // optimistic, like the level
     showEffectOsd(index)
-    effectSetProc.command = [effectHelper, "set", String(index)]
+    effectSetProc.command = [root.transport, "set", "--device", String(keyboardIndex), "--effect", String(index)]
     effectSetProc.running = true
   }
 
+  // Kept as a name because callers read better for it, but there is no
+  // longer a separate effect read: one `mx-device state` carries the effect,
+  // the level and the level count together.
   function refreshEffect() {
     if (!hasKeyboard) return
-    if (verifyQueue.indexOf("effect") === -1) verifyQueue = verifyQueue.concat(["effect"])
-    runNextVerify()
+    refresh()
   }
 
   function showEffectOsd(index) {
@@ -718,7 +661,7 @@ Panel {
       // up to five minutes stale. Re-read on open, but with the targeted
       // call (~2.3s) rather than the full enumeration (~10.5s): opening the
       // panel should not cost what a device scan costs.
-      refreshBacklight()   // includes the effect read; see runNextVerify
+      refreshBacklight()   // one call, which carries the effect too
     }
   }
 

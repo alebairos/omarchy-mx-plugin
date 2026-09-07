@@ -46,7 +46,12 @@ class _Device:
                 # A well-formed frame with an empty effects bitmap: exactly
                 # what contention produces, and never an error.
                 return bytes(16)
-            return bytes([0x01, 0x1D, 0x3D, 0x7F, 0x00, 0x06, 0x06, 0x00,
+            # Byte 5 is the *saved* level, deliberately 3 here while the
+            # live level in GET_STATE below is 6. They disagree on real
+            # hardware exactly when something is wrong, and reading the
+            # saved one is the most expensive mistake this project has made
+            # (see AGENTS.md). A test asserts the transport reports 6.
+            return bytes([0x01, 0x1D, 0x3D, 0x7F, 0x00, 0x03, 0x06, 0x00,
                           0x06, 0x00, 0x3C, 0x00, 0, 0, 0, 0])
         if fn == 0x20:  # GET_STATE
             if attempt <= degraded:
