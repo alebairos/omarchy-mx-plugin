@@ -14,6 +14,7 @@ class _Device:
         self._name = name
         self._backlit = backlit
         self._reads = 0
+        self._writes = 0
 
     @property
     def name(self):
@@ -35,7 +36,16 @@ class _Device:
             return None
         if fn == 0x10:  # SET_CONFIG
             _base._record("write", index=self.number)
-            return b"\x00" if os.environ.get("MXD_STUB_REJECT") != "1" else None
+            if os.environ.get("MXD_STUB_REJECT") == "1":
+                return None
+            # A write that loses a race answers None and the next one works.
+            # MXD_STUB_REJECT cannot express that: it fails every write, so
+            # it can only produce a device that refuses outright, never the
+            # contention that caused the frozen-frame bug.
+            self._writes += 1
+            if self._writes <= int(os.environ.get("MXD_STUB_FAILED_WRITES", "0")):
+                return None
+            return b"\x00"
         self._reads += 1
         degraded = int(os.environ.get("MXD_STUB_DEGRADED_READS", "0"))
         # Each *pair* of requests (config, state) is one attempt; degrade the
