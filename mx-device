@@ -73,6 +73,13 @@ EFFECT_RESET_PULSE_SECONDS = float(os.environ.get("MX_EFFECT_PULSE", "0.2"))
 READ_ATTEMPTS = 4
 READ_BACKOFF_SECONDS = 0.4
 
+# The blanking write gets its own, smaller budget. It sits in front of a
+# user-visible action, so a long retry chain would be felt as lag on every
+# effect change; and unlike a read there is a sane way to carry on without
+# it (the effect still gets written, the frame just may not clear).
+BLANK_ATTEMPTS = 3
+BLANK_BACKOFF_SECONDS = 0.15
+
 MODES = {"Enabled": 0x00, "Automatic": 0x01, "Manual": 0x03, "Disabled": 0xFF}
 MODE_NAMES = {0x00: "Enabled", 0x01: "Automatic", 0x03: "Manual"}
 
@@ -242,6 +249,29 @@ def find(index):
     raise TransportError("no-devices", f"no device at index {index}")
 
 
+def blank(device, feature, off):
+    """Power the LEDs down, and confirm the device actually took the write.
+
+    This return value used to be discarded, and that was the frozen-frame bug.
+    `request` answers None on a timeout or an error (base.py), so a contended
+    blank was already reporting its own failure -- the code then slept out the
+    pulse and wrote the new effect over LEDs that had never been cleared,
+    leaving the previous effect's last frame lit. Intermittent for exactly the
+    reason it was hard to reproduce: it needs a write to lose a race, which is
+    rare and not something a person can provoke on demand.
+
+    Note `is None` and not a truth test. A write that succeeds replies with
+    sixteen zero bytes -- verified on the reference hardware -- and that is
+    falsy, so `if not reply` would treat every successful blank as a failure.
+    """
+    for attempt in range(BLANK_ATTEMPTS):
+        if device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, off) is not None:
+            return True
+        if attempt + 1 < BLANK_ATTEMPTS:
+            time.sleep(BLANK_BACKOFF_SECONDS)
+    return False
+
+
 def command_set(index, level=None, effect=None, mode=None):
     device, feature = find(index)
 
@@ -297,11 +327,16 @@ def command_set(index, level=None, effect=None, mode=None):
     off = struct.pack("<BBBBHHH", 0, *common, 0, *tail)
     on = struct.pack("<BBBBHHH", 1, *common, level_out, *tail)
 
-    device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, off)
+    blanked = blank(device, feature, off)
     time.sleep(EFFECT_RESET_PULSE_SECONDS)
     if device.feature_request(feature.BACKLIGHT2, FN_SET_CONFIG, on) is None:
         raise TransportError("rejected", f"device rejected effect {effect}")
-    return {"ok": True}
+
+    # Reported rather than raised. The user asked for an effect change and got
+    # one; what failed is the cosmetic cleanup in front of it. Failing the
+    # whole call would turn a possibly-stale frame into a visible error for an
+    # effect that did change, which is the worse of the two.
+    return {"ok": True, "blanked": blanked}
 
 
 def main():

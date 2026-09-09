@@ -214,3 +214,47 @@ test("the transport reports the LIVE level, never the saved one", () => {
   assert.equal(kbd.backlight.level, 6)
   assert.notEqual(kbd.backlight.level, 3)
 })
+
+test("a blanking write that loses a race is retried, not discarded", () => {
+  // The frozen-frame bug. The blank's return value used to be thrown away,
+  // so a contended write left the LEDs lit and the new effect was written
+  // over the old effect's last frame — a Wave that never stopped waving.
+  // One failed write, then a good one.
+  const { json, events } = runTransport(
+    ["set", "--device", "1", "--effect", "3"], { MXD_STUB_FAILED_WRITES: "1" })
+
+  assert.equal(json.ok, true)
+  assert.equal(json.blanked, true, "the blank must be retried until it lands")
+  // Two blanks (one lost, one good) plus the effect write itself.
+  assert.equal(events.filter((e) => e.event === "write").length, 3)
+})
+
+test("a blank that never lands still sets the effect, and says so", () => {
+  // The effect change is what the user asked for; the blank is cleanup in
+  // front of it. Failing the whole call would report an error for an effect
+  // that did in fact change. So it degrades to a stale frame, reported.
+  const { json } = runTransport(
+    ["set", "--device", "1", "--effect", "3"], { MXD_STUB_FAILED_WRITES: "3" })
+
+  assert.equal(json.ok, true)
+  assert.equal(json.blanked, false)
+})
+
+test("the blank retry budget is bounded", () => {
+  // An unbounded retry would sit in front of every effect change on a device
+  // that is simply refusing, turning a cosmetic failure into a hang.
+  const { events } = runTransport(
+    ["set", "--device", "1", "--effect", "3"], { MXD_STUB_FAILED_WRITES: "99" })
+  const writes = events.filter((e) => e.event === "write").length
+  assert.ok(writes <= 4, `blank retried ${writes} times; budget is 3 plus the effect write`)
+})
+
+test("a successful blank is not mistaken for a failed one", () => {
+  // The reply to a successful write is sixteen zero bytes, which is falsy.
+  // A truth test here would retry every blank three times and then report
+  // blanked:false on a device that was working perfectly.
+  const { json, events } = runTransport(["set", "--device", "1", "--effect", "3"])
+  assert.equal(json.blanked, true)
+  assert.equal(events.filter((e) => e.event === "write").length, 2,
+    "one blank and one effect write — no spurious retries")
+})
