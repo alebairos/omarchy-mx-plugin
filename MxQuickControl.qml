@@ -538,11 +538,15 @@ Panel {
     // has to be read back off the device.
     function deviceChanged(): void {
       root.announceExternalChange = true
-      // Only the effect read is needed: it reports level and effect in a
-      // single ~2s call. Running the full pipeline here meant waiting on two
-      // further reads (~5s more) before the OSD could appear, which was long
-      // enough to feel disconnected from the key press that caused it.
-      root.refreshEffect()
+      // Only one read is needed: it reports level and effect together. This
+      // used to go through refreshEffect(), which returns early unless a
+      // keyboard is already known -- and that is exactly backwards here. A
+      // notification is proof the keyboard is alive, so it is the best moment
+      // to recover from a "no backlight-capable device" state, not one to sit
+      // out. Observed: the link dropped, the widget published no keyboard, and
+      // pressing the backlight keys could not bring it back for five minutes
+      // even though every press was arriving.
+      root.refresh()
     }
 
     // The same notification, but with the value Solaar already had in hand.
@@ -572,7 +576,7 @@ Panel {
         return
       }
       root.announceExternalChange = true
-      root.refreshEffect()
+      root.refresh()      // refresh(), not refreshEffect() -- see deviceChanged
     }
     function level(value: string): void { root.setBrightness(parseInt(value, 10)) }
     function status(): string {
