@@ -254,3 +254,61 @@ test("a degraded frame never yields a zero level count the UI could believe", ()
   assert.equal(parsed.devices.length, 0)
   assert.equal(parsed.ok, false)
 })
+
+
+// ------------------------------------------- device-reported backlight change
+
+test("a moved effect is taken from the notification, not read back", () => {
+  // The whole point of the per-effect Solaar rules: the value arrived with
+  // the notification, so the 2.7s receiver enumeration is not needed.
+  assert.equal(M.externalEffectAction(5, 4, true), "apply")
+  assert.equal(M.externalEffectAction(0, 6, true), "apply")
+})
+
+test("an unchanged effect means something else moved, so it must be read", () => {
+  // The BACKLIGHT2 notification is a full state report, not a delta. Pressing
+  // F4/F5 changes the brightness and still reports the old effect, so
+  // treating "same effect" as "nothing happened" would swallow every
+  // brightness change made on the keyboard itself.
+  assert.equal(M.externalEffectAction(4, 4, true), "read")
+})
+
+test("an effect reported before any device is known falls back to a read", () => {
+  // Nothing to compare against, and showEffectOsd needs a keyboard index.
+  assert.equal(M.externalEffectAction(5, 0, false), "read")
+})
+
+test("a malformed effect argument never becomes effect NaN", () => {
+  // The value crosses a process boundary as a string; parseInt of anything
+  // unexpected is NaN, and NaN !== current would otherwise read as "apply"
+  // and publish an OSD for an effect that does not exist.
+  for (const bad of [NaN, undefined, null, "3", -1]) {
+    assert.equal(M.externalEffectAction(bad, 4, true), "read",
+      `reported ${JSON.stringify(bad)} must not be applied`)
+  }
+})
+
+test("every Solaar rule passes the effect its own test matched", () => {
+  // solaar-rule.yaml is generated: 16 near-identical rules where the only
+  // thing distinguishing them is a number repeated in two places. A copy
+  // that drifted would fire the wrong OSD for one effect and nothing would
+  // catch it by eye, so the pairing is asserted rather than trusted.
+  const rules = fs.readFileSync(path.join(__dirname, "..", "solaar-rule.yaml"), "utf8")
+  const pairs = [...rules.matchAll(
+    /TestBytes: \[3, 4, (\d+), (\d+)\]\n\s*- Execute: \[[^\]]*externalEffect, "(\d+)"\]/g)]
+
+  assert.equal(pairs.length, 16, "expected one rule per effect index 0-15")
+  for (const [, lo, hi, passed] of pairs) {
+    assert.equal(lo, hi, `TestBytes range must match a single value, got ${lo}-${hi}`)
+    assert.equal(passed, lo, `rule testing effect ${lo} passes ${passed}`)
+  }
+  assert.deepEqual(pairs.map((m) => Number(m[1])), [...Array(16).keys()],
+    "effects 0-15 must each have exactly one rule, in order")
+
+  // The catch-all must come last: Solaar stops at the first rule whose
+  // Execute runs (diversion.py, _evaluate), so a catch-all placed earlier
+  // would shadow every per-effect rule and reinstate the slow path.
+  const catchAll = rules.lastIndexOf("deviceChanged]")
+  const lastTest = rules.lastIndexOf("TestBytes:")
+  assert.ok(catchAll > lastTest, "the deviceChanged fallback must be the last rule")
+})
