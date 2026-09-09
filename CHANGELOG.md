@@ -23,9 +23,25 @@ merged to only from a branch whose CI is green.
   `Execute` cannot substitute a matched value into its argument list, so
   [`solaar-rule.yaml`](solaar-rule.yaml) now enumerates one rule per effect —
   `TestBytes: [3, 4, N, N]` paired with a literal `N` — and the rule list
-  short-circuits, so exactly one fires. The OSD is now a 40ms IPC call
-  (measured `qs ipc call`: 39/37/39ms) against 3.08s, with no device traffic
-  at all.
+  short-circuits, so exactly one fires.
+
+  Verified on the reference hardware against the running shell, watching the
+  wire and the widget's own state at the same time:
+
+  | device broadcast | widget shows the new effect | gap |
+  |---|---|---|
+  | 14:15:54.075 → effect 0 | 14:15:54.231 | 156ms |
+  | 14:15:56.130 → effect 3 | 14:15:56.305 | 175ms |
+  | 14:15:59.002 → effect 2 | 14:15:59.069 | 67ms |
+
+  Those gaps are upper bounds: the observer polled at 100ms and spent ~36ms
+  per sample in `qs ipc call`, so the 67ms row is the one that bounds the real
+  figure. Under 100ms, against 3.08s.
+
+  The stronger evidence is the absence: **three frames crossed the wire in
+  the twenty seconds covering all three presses** — the three notifications
+  themselves and nothing else. `busy` never went true. One press previously
+  produced around forty frames of receiver enumeration.
 
   Brightness from F4/F5 is unchanged in speed and deliberately so: the
   notification is a full state report rather than a delta, so it arrives

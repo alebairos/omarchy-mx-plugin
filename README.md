@@ -187,7 +187,8 @@ All three are optional; omit them and the defaults apply.
 
   With that rule installed, **the effect key is the one action that costs no
   device read**: its value travels inside the notification, so the OSD
-  appears in about 40ms rather than the ~2s below. Brightness from F4/F5 does
+  appears in under 100ms rather than the ~2s below, and the device is not
+  contacted at all. Brightness from F4/F5 does
   still cost a read — the notification reports the whole backlight state
   rather than what moved, so the widget can tell the effect changed but has
   to ask the device what the new level is.
