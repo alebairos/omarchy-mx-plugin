@@ -14,9 +14,132 @@
 #
 # Install by appending to ~/.config/solaar/rules.yaml (create it if absent),
 # then restart Solaar.
+#
+#
+# Why there is one rule per effect, instead of one rule
+# ----------------------------------------------------
+#
+# A single `Feature: BACKLIGHT2` rule can only say that *something* changed,
+# because Solaar's `Execute` action takes a fixed argument list with no
+# substitution (diversion.py, class Execute). The widget then had to read the
+# value back off the device, which costs a receiver enumeration: measured on
+# the reference hardware at 3.08s from the key press to the OSD, of which
+# 1.35s was spent reading a mouse that has no backlight.
+#
+# The value was in the notification the whole time. Captured off /dev/hidraw
+# while pressing the effect key, one frame per press:
+#
+#   data=0b 00 | 08 04 05 05      effect 5
+#   data=0b 00 | 08 04 05 00      effect 0
+#   data=0b 00 | 08 04 05 03      effect 3
+#        ^     ^  ^     ^
+#        |     |  |     effect
+#        |     |  level (8 levels, currently 4 -- unchanged by this key)
+#        |     address 0x00: device-initiated, not a reply to a request
+#        BACKLIGHT2 feature index on this device
+#
+# `make_notification` (base.py) passes the rule engine `data[2:]`, so the
+# body starts at index 0: the level is at data[1] -- which is where Solaar's
+# own handler reads it -- and the effect at data[3]. `TestBytes: [3, 4, N, N]`
+# is therefore "the effect is N" (diversion.py, range_test), and a rule that
+# matches only one value can pass that value as a literal.
+#
+# Hence the enumeration below. The rule list short-circuits: a rule whose
+# `Execute` runs returns None, which ends evaluation (diversion.py,
+# _evaluate), so exactly one of these fires and the catch-all at the end is
+# reached only when none matched.
+#
+# One thing the notification does NOT tell us is *what* moved -- it is a full
+# state report, so a brightness change from F4/F5 also arrives carrying the
+# (unchanged) effect. The widget handles that: an effect equal to what it
+# already holds means something else moved, and it falls back to reading the
+# device, exactly as it did before this file grew. Brightness is no faster
+# than it was; the effect key is ~70x faster.
 
 %YAML 1.3
 ---
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 0, 0]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "0"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 1, 1]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "1"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 2, 2]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "2"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 3, 3]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "3"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 4, 4]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "4"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 5, 5]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "5"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 6, 6]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "6"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 7, 7]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "7"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 8, 8]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "8"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 9, 9]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "9"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 10, 10]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "10"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 11, 11]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "11"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 12, 12]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "12"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 13, 13]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "13"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 14, 14]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "14"]
+
+- Rule:
+  - Feature: BACKLIGHT2
+  - TestBytes: [3, 4, 15, 15]
+  - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, externalEffect, "15"]
+# Anything the tests above did not match -- an effect outside 0-15, or a
+# device whose broadcast is shaped differently. Behaves as this file did
+# before: the widget reads the device to find out what changed.
 - Rule:
   - Feature: BACKLIGHT2
   - Execute: [qs, -p, /usr/share/omarchy/shell, ipc, call, alebairos.mx-quick-control, deviceChanged]
