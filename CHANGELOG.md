@@ -11,6 +11,33 @@ merged to only from a branch whose CI is green.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The keyboard's own effect key no longer waits on a device read.** Pressing
+  it took 3.08s to raise an OSD, measured off `/dev/hidraw` from the device's
+  own notification to the last frame of the read it triggered. The value was
+  in that first notification the whole time: a BACKLIGHT2 broadcast reports
+  `[levels, level, ?, effect]`, and Solaar hands its rule engine `data[2:]`,
+  so the effect sits at `data[3]`.
+
+  `Execute` cannot substitute a matched value into its argument list, so
+  [`solaar-rule.yaml`](solaar-rule.yaml) now enumerates one rule per effect —
+  `TestBytes: [3, 4, N, N]` paired with a literal `N` — and the rule list
+  short-circuits, so exactly one fires. The OSD is now a 40ms IPC call
+  (measured `qs ipc call`: 39/37/39ms) against 3.08s, with no device traffic
+  at all.
+
+  Brightness from F4/F5 is unchanged in speed and deliberately so: the
+  notification is a full state report rather than a delta, so it arrives
+  carrying an *unchanged* effect. `Model.externalEffectAction` treats that as
+  "something moved that this rule cannot name" and falls back to the previous
+  read, rather than mistaking it for nothing having happened and swallowing
+  the change.
+
+  The old single `deviceChanged` rule keeps working, so an existing
+  `~/.config/solaar/rules.yaml` from 1.0.0 needs no edit to keep behaving as
+  it does today.
+
 ## [1.1.0] — 2026-09-07
 
 One transport to the device. The plugin previously reached the keyboard
