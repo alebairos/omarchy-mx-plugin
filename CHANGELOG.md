@@ -13,6 +13,21 @@ merged to only from a branch whose CI is green.
 
 ### Fixed
 
+- **Effect switching no longer writes over LEDs it failed to clear.** The
+  backlight is blanked between effects to stop the previous effect's last
+  frame staying lit; that write's return value was discarded, so a blank that
+  lost a race failed silently and the new effect was written anyway — the
+  intermittent "Wave to Static leaves a frozen wave" fault. `request` answers
+  `None` on a timeout or error, so the failure was already being reported and
+  thrown away. The blank is now retried on its own small budget, and a blank
+  that never lands is reported (`"blanked": false`) rather than raised: the
+  effect change itself succeeded, and failing the call would show an error
+  for something that worked.
+
+  Reproducible on demand for the first time, via a new `MXD_STUB_FAILED_WRITES`
+  knob — the existing `MXD_STUB_REJECT` fails *every* write, so it could only
+  model a device refusing outright, never contention.
+
 - **The keyboard's own effect key no longer waits on a device read.** Pressing
   it took 3.08s to raise an OSD, measured off `/dev/hidraw` from the device's
   own notification to the last frame of the read it triggered. The value was
