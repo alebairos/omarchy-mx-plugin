@@ -164,7 +164,9 @@ All three are optional; omit them and the defaults apply.
 - **Roughly two seconds per action.** The plugin runs a short-lived process
   per action rather than holding a connection open, so a toggle or a
   brightness change takes about that long to reach the keyboard. The panel
-  updates immediately; the keyboard follows.
+  updates immediately; the keyboard follows. The one exception is the
+  keyboard's own effect key with the Solaar rule installed, which needs no
+  process at all — see the next bullet.
 
   Most of that is not the plugin: reaching a sleeping wireless device costs
   most of the two seconds, and it varies with how recently the device was
@@ -182,6 +184,13 @@ All three are optional; omit them and the defaults apply.
   the listening to it: append it to `~/.config/solaar/rules.yaml`, restart
   Solaar, and the panel follows the hardware keys and shows an on-screen
   display for them. Nothing breaks without it.
+
+  With that rule installed, **the effect key is the one action that costs no
+  device read**: its value travels inside the notification, so the OSD
+  appears in about 40ms rather than the ~2s below. Brightness from F4/F5 does
+  still cost a read — the notification reports the whole backlight state
+  rather than what moved, so the widget can tell the effect changed but has
+  to ask the device what the new level is.
 - **Effects are only exposed for keyboards that report them.** The list
   comes from the device's own capability bitmap, so a keyboard that
   advertises no effects simply gets no effect row.

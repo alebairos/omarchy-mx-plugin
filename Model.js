@@ -266,6 +266,26 @@ function shouldTrustKeyboardLoss(hadKeyboardBefore, consecutiveMisses) {
   return consecutiveMisses >= missesBeforeBelievingLoss
 }
 
+// What to do with a backlight change the *device* reported, rather than one
+// this widget made.
+//
+// The optional Solaar rule (solaar-rule.yaml) carries the effect out of the
+// HID++ notification, so the common case needs no device read at all. But the
+// notification is a full state report rather than a delta: a brightness
+// change from F4/F5 arrives carrying the effect too, unchanged. So a reported
+// effect equal to the one already held is not "nothing happened" -- it means
+// something happened that this rule cannot name, and the only way to find out
+// is the read that used to be the whole mechanism.
+//
+// Returns "apply" to take the reported value and show an OSD, or "read" to
+// fall back to interrogating the device.
+function externalEffectAction(reported, current, hasKeyboard) {
+  if (!hasKeyboard) return "read"              // nothing to compare against yet
+  if (typeof reported !== "number" || isNaN(reported)) return "read"
+  if (reported < 0) return "read"
+  return reported === current ? "read" : "apply"
+}
+
 // Omarchy narrowed the plugin shell API in 4.0.0.r2095 (2026-09-10):
 // `shell.summon` from a third-party plugin now requires the caller to own
 // the target, to declare the `bar` kind (which means *replacing* the bar --
@@ -310,6 +330,7 @@ if (typeof module !== "undefined" && module.exports) {
     nextEffect: nextEffect,
     effectLabel: effectLabel,
     effectNames: effectNames,
+    externalEffectAction: externalEffectAction,
     shouldTrustKeyboardLoss: shouldTrustKeyboardLoss,
     missesBeforeBelievingLoss: missesBeforeBelievingLoss
   }

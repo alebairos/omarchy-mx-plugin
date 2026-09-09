@@ -578,12 +578,46 @@ Panel {
     // Called by an optional Solaar rule when the device reports a backlight
     // change made with the keyboard's own keys. Solaar is the thing
     // listening -- this plugin runs no daemon of its own.
+    //
+    // Kept as the fallback path, and kept working for anyone who installed
+    // the 1.0.0 rule: it says only that *something* changed, so the answer
+    // has to be read back off the device.
     function deviceChanged(): void {
       root.announceExternalChange = true
       // Only the effect read is needed: it reports level and effect in a
       // single ~2s call. Running the full pipeline here meant waiting on two
       // further reads (~5s more) before the OSD could appear, which was long
       // enough to feel disconnected from the key press that caused it.
+      root.refreshEffect()
+    }
+
+    // The same notification, but with the value Solaar already had in hand.
+    //
+    // The device's BACKLIGHT2 broadcast is a full state report, not a delta:
+    // its body is [levels, level, ?, effect]. Solaar passes the rule engine
+    // `data[2:]` (base.py, make_notification), so the effect sits at data[3]
+    // and a rule can test for it -- see solaar-rule.yaml for the captured
+    // frames the offset comes from. The effect key therefore needs no device
+    // read at all: 2.7s of enumerating the receiver becomes a 40ms IPC call.
+    //
+    // Because the report carries the whole state rather than what moved, an
+    // unchanged effect means something *else* moved -- brightness, from
+    // F4/F5, whose value this rule cannot carry -- and that still has to be
+    // read back. So the fast path is taken only when the effect really
+    // changed, and everything else degrades to exactly today's behaviour
+    // rather than being silently swallowed.
+    //
+    // This cannot echo the widget's own writes: the reference device
+    // broadcasts only for changes made at the keyboard, verified by watching
+    // the wire while driving `mx-device set --effect` (no broadcast follows).
+    function externalEffect(value: string): void {
+      var index = parseInt(value, 10)
+      if (Model.externalEffectAction(index, root.effectIndex, root.hasKeyboard) === "apply") {
+        root.effectIndex = index
+        root.showEffectOsd(index)
+        return
+      }
+      root.announceExternalChange = true
       root.refreshEffect()
     }
     function level(value: string): void { root.setBrightness(parseInt(value, 10)) }
