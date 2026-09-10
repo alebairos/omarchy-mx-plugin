@@ -115,6 +115,35 @@ executable rather than folkloric.
   quirks above. This is where command *sequence* is asserted; unit tests
   cannot see it, and every serious bug in this plugin lived there.
 
+Those two run anywhere with node. Two more tiers follow the shape of
+Omarchy's own `test/shell` and `test/acceptance`, and need an Omarchy
+machine:
+
+- **`npm run test:shell`** — `tests/shell.d/*-test.sh`. Each file is one
+  concern and skips, saying why, when this machine lacks what it needs.
+  `widget-interaction-test.sh` is the one closest to a browser test: it
+  loads the real `MxQuickControl.qml` into a throwaway `quickshell` under a
+  fake bar and the fake transport, then **clicks the bar icon, clicks the
+  slider, clicks the toggle, reports a device state, and presses Escape**
+  using QtTest's `TestEvent` — and asserts from the fake's log what the UI
+  actually sent (one write per gesture, no read after a reported change).
+  Beside it: the glyphs the QML draws exist in an installed font, the QML
+  parses, and the generated Solaar rules fire for captured frames when
+  judged by Solaar's own `diversion` engine.
+- **`npm run test:acceptance`** — `tests/acceptance.d/*-test.sh`, run
+  inside a live session with the plugin on the bar. Summons the panel and
+  proves it is on screen (`hyprctl` layers) and says "Backlight" (grim +
+  tesseract OCR), reports a level and proves the OSD layer appears with no
+  device read, then makes one brightness write and **one** read to compare
+  against device truth. Every step leaves a screenshot in
+  `$OMARCHY_ACCEPTANCE_DIR`. This is the only tier that touches the
+  keyboard, and it counts every contact — see `AGENTS.md` on why polling
+  the device is not read-only.
+
+Neither of those is a pixel comparison. Omarchy has none either: its visual
+convention is geometry assertions on real components, OCR for text, and
+screenshots for a human to look at, which is what these do too.
+
 **Do not trust a green suite.** Before relying on a test, break the code it
 covers and confirm it fails. One test here previously passed with the
 parser deliberately broken, because `solaar` prints the saved line before
