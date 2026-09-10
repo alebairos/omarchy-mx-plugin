@@ -95,6 +95,19 @@ not retry or recover on its own.
   is nested one level -- `[<the file's rules>, <built-ins>]` -- so a flat
   iteration reports two rules and looks alarming for no reason.
 
+## Two more tiers, in Omarchy's own shape
+
+`npm test` is node-only. `npm run test:shell` (tests/shell.d) launches the
+real widget in a throwaway quickshell under a fake bar and the fake
+transport and drives it with QtTest's TestEvent -- clicks, a reported state,
+Escape -- then asserts from the fake's log what the UI sent. It also runs
+the offline rules-engine check above as a test, and fails on any TypeError
+the widget logs while loading. `npm run test:acceptance` (tests/acceptance.d)
+runs inside a live session and touches the device exactly three times.
+Every file skips, saying why, where it cannot run. Break the code before
+trusting either: all of them were confirmed to fail against mutations when
+written, and CONTRIBUTING.md describes what each one proves.
+
 ## Do not trust a green test suite
 
 Before claiming a test protects something, break the code and watch it

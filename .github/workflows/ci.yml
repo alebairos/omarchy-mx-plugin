@@ -22,6 +22,15 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Shell tier (self-skipping without a desktop)
+        # Same shape as Omarchy's own test/shell. On this runner there is no
+        # compositor, no quickshell, no Nerd Font and no Solaar, so every file
+        # says so and passes; the point here is that the scripts themselves
+        # stay runnable. The real run is `npm run test:shell` on an Omarchy
+        # machine, where they launch the real shell and evaluate the real
+        # rules engine.
+        run: npm run test:shell
+
   manifest:
     name: Plugin manifest is valid
     runs-on: ubuntu-latest

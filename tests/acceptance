@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# Live acceptance suite. Runs INSIDE an Omarchy session with the plugin
+# installed and on the bar, against the real shell and the real keyboard.
+# Same shape as Omarchy's own test/acceptance: surfaces are driven over IPC,
+# proven with hyprctl layers and OCR, and every step leaves a screenshot in
+# $OMARCHY_ACCEPTANCE_DIR (default /tmp/omarchy-acceptance).
+#
+# This is the tier that answers "does it look and behave right on a real
+# desktop", which nothing headless can. It touches the device deliberately
+# and sparingly: see AGENTS.md on why polling it is not read-only.
+
+set -euo pipefail
+
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+TEST_DIR="$ROOT/tests/acceptance.d"
+
+export OMARCHY_ACCEPTANCE_DIR="${OMARCHY_ACCEPTANCE_DIR:-/tmp/omarchy-acceptance}"
+mkdir -p "$OMARCHY_ACCEPTANCE_DIR"
+
+export OMARCHY_PATH="${OMARCHY_PATH:-/usr/share/omarchy}"
+export PATH="$OMARCHY_PATH/bin:$PATH"
+
+shopt -s nullglob
+tests=()
+for test in "$TEST_DIR"/*-test.sh; do
+  [[ $(basename "$test") == "base-test.sh" ]] && continue
+  tests+=("$test")
+done
+shopt -u nullglob
+
+if (( ${#tests[@]} == 0 )); then
+  echo "No acceptance tests found in $TEST_DIR" >&2
+  exit 1
+fi
+
+failed=()
+for test in "${tests[@]}"; do
+  printf '==> %s\n' "${test#$ROOT/}"
+  bash "$test" || failed+=("${test#$ROOT/}")
+done
+
+printf '\nartifacts: %s\n' "$OMARCHY_ACCEPTANCE_DIR"
+
+if (( ${#failed[@]} > 0 )); then
+  printf '%d of %d acceptance files failed:\n' "${#failed[@]}" "${#tests[@]}" >&2
+  printf '  %s\n' "${failed[@]}" >&2
+  exit 1
+fi
+
+printf 'All %d acceptance files passed.\n' "${#tests[@]}"
