@@ -33,6 +33,27 @@ merged to only from a branch whose CI is green.
   fires — silently, with a clean journal. Restarting Solaar
   (`systemctl --user restart app-solaar@autostart.service`) re-enumerates it.
 
+### Internal
+
+- **Two test tiers in the shape of Omarchy's own `test/shell` and
+  `test/acceptance`.** `npm run test:shell` launches the real
+  `MxQuickControl.qml` in a throwaway `quickshell` under a fake bar and the
+  fake transport and drives it with QtTest's `TestEvent` — a click on the
+  bar icon opens the panel, a click on the slider writes level 7, a click on
+  the toggle writes level 0, a reported `3:2` applies both values and asks
+  for two OSDs without a read, Escape closes — then asserts from the fake's
+  log that exactly two reads and two writes were sent. Beside it: every
+  glyph the QML draws exists in an installed font, the QML parses, and the
+  generated rules fire for captured frames when evaluated by Solaar's own
+  `diversion` engine (the check that separates "the rule is wrong" from
+  "Solaar is not evaluating"). `npm run test:acceptance` runs inside a live
+  session: the panel is proven on screen via `hyprctl` layers and to say
+  "Backlight" via OCR, the OSD layer is proven to appear for a reported
+  level with no device read, and one brightness write is checked against
+  one read of device truth, with a screenshot per step. Each file skips,
+  saying why, on a machine that lacks what it needs, so CI runs the tier
+  without a desktop and the scripts stay honest about coverage.
+
 - **Effect switching no longer writes over LEDs it failed to clear.** The
   backlight is blanked between effects to stop the previous effect's last
   frame staying lit; that write's return value was discarded, so a blank that
