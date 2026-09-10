@@ -809,7 +809,7 @@ Panel {
 
       PanelSectionHeader {
         text: root.hasKeyboard ? root.keyboardName : root.unavailableTitle
-        foreground: root.bar.foreground
+        foreground: (root.bar ? root.bar.foreground : Color.foreground)
       }
 
       Text {
@@ -817,8 +817,8 @@ Panel {
         width: parent.width
         textFormat: Text.PlainText
         text: root.unavailableDetail
-        color: Qt.darker(root.bar.foreground, 1.3)
-        font.family: root.bar.fontFamily
+        color: Qt.darker((root.bar ? root.bar.foreground : Color.foreground), 1.3)
+        font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
         wrapMode: Text.WordWrap
       }
 
@@ -828,7 +828,7 @@ Panel {
         label: "Backlight"
         description: (root.showBattery && root.keyboardBattery >= 0) ? "Battery " + root.keyboardBattery + "%" : ""
         checked: root.backlightOn
-        foreground: root.bar.foreground
+        foreground: (root.bar ? root.bar.foreground : Color.foreground)
         hasCursor: root.cursorActive && root.cursorRow === "toggle"
         onClicked: root.toggleBacklight()
         onHovered: function(h) { if (h) { root.cursorActive = true; root.cursorIndex = 0 } }
@@ -851,8 +851,8 @@ Panel {
         Text {
           // mdi-brightness-7, verified present in JetBrainsMono Nerd Font.
           text: "󰃠"
-          color: root.bar.foreground
-          font.family: root.bar.fontFamily
+          color: (root.bar ? root.bar.foreground : Color.foreground)
+          font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
           font.pixelSize: Style.font.heading
           anchors.verticalCenter: parent.verticalCenter
         }
@@ -878,8 +878,8 @@ Panel {
         Text {
           textFormat: Text.PlainText
           text: String(root.backlightLevel > 0 ? root.backlightLevel : root.lastOnLevel)
-          color: root.bar.foreground
-          font.family: root.bar.fontFamily
+          color: (root.bar ? root.bar.foreground : Color.foreground)
+          font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
           width: 24
           horizontalAlignment: Text.AlignRight
           anchors.verticalCenter: parent.verticalCenter
@@ -897,8 +897,8 @@ Panel {
         Text {
           // mdi-auto-fix: the "effect" glyph, tinted like every other icon.
           text: "󰁨"
-          color: root.bar.foreground
-          font.family: root.bar.fontFamily
+          color: (root.bar ? root.bar.foreground : Color.foreground)
+          font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
           font.pixelSize: Style.font.heading
           anchors.verticalCenter: parent.verticalCenter
         }
@@ -912,7 +912,7 @@ Panel {
             anchors.fill: parent
             radius: Style.cornerRadius
             color: (root.cursorActive && root.cursorRow === "effect") || effectMouse.containsMouse
-              ? Style.selectedFillFor(root.bar.foreground, Color.accent) : "transparent"
+              ? Style.selectedFillFor((root.bar ? root.bar.foreground : Color.foreground), Color.accent) : "transparent"
             Behavior on color { ColorAnimation { duration: 100 } }
           }
 
@@ -921,8 +921,8 @@ Panel {
             anchors.centerIn: parent
             textFormat: Text.PlainText
             text: Model.effectLabel(root.effectIndex)
-            color: root.bar.foreground
-            font.family: root.bar.fontFamily
+            color: (root.bar ? root.bar.foreground : Color.foreground)
+            font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
           }
 
           MouseArea {
@@ -945,8 +945,8 @@ Panel {
           text: root.effectsSelectable.length > 0
             ? ((root.effectsSelectable.indexOf(root.effectIndex) + 1) + "/" + root.effectsSelectable.length)
             : ""
-          color: Qt.darker(root.bar.foreground, 1.4)
-          font.family: root.bar.fontFamily
+          color: Qt.darker((root.bar ? root.bar.foreground : Color.foreground), 1.4)
+          font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
           font.pixelSize: Style.font.caption
           width: 24
           horizontalAlignment: Text.AlignRight
@@ -956,7 +956,7 @@ Panel {
 
       PanelSeparator {
         visible: root.showBattery && root.otherDevices.length > 0
-        foreground: root.bar.foreground
+        foreground: (root.bar ? root.bar.foreground : Color.foreground)
       }
 
       Repeater {
@@ -965,8 +965,8 @@ Panel {
           width: column.width
           textFormat: Text.PlainText
           text: modelData.name + ": " + (modelData.batteryPercent !== null ? modelData.batteryPercent + "%" : "battery n/a")
-          color: root.bar.foreground
-          font.family: root.bar.fontFamily
+          color: (root.bar ? root.bar.foreground : Color.foreground)
+          font.family: (root.bar ? root.bar.fontFamily : Style.font.family)
         }
       }
     }
