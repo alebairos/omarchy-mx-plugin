@@ -311,10 +311,49 @@ function osdFallbackCommand(payloadJson) {
   return ["omarchy-shell", "shell", "summon", "omarchy.osd", String(payloadJson || "")]
 }
 
+// The generated Solaar rules pass level and effect together as one literal,
+// "L:E", because one rule fires per notification and Execute cannot
+// substitute. Anything that does not parse as two non-negative integers is
+// not a state report and must not be applied.
+function parseExternalState(value) {
+  var m = /^(\d+):(\d+)$/.exec(String(value === undefined || value === null ? "" : value).trim())
+  if (!m) return null
+  return { level: parseInt(m[1], 10), effect: parseInt(m[2], 10) }
+}
+
+// What to do with a full backlight state the *device* reported.
+//
+// The BACKLIGHT2 broadcast is a state report, not a delta: it carries both
+// values every time and does not say which key was pressed. So the decision
+// is a comparison against what the widget already holds, per value. Each
+// moved value is applied and announced; a value that did not move is left
+// alone rather than triggering a read, which is what made brightness cost
+// 2s when only the effect rules existed. A report where nothing moved is
+// the one case that still reads: it means something this rule cannot name
+// changed (the mode, say), and that is the old behaviour, now rare.
+//
+// Returns { level: "apply"|"keep", effect: "apply"|"keep", read: bool }.
+function externalStateAction(reported, currentLevel, currentEffect, hasKeyboard) {
+  var read = { level: "keep", effect: "keep", read: true }
+  if (!hasKeyboard) return read                  // nothing to compare against yet
+  if (!reported) return read
+  if (typeof reported.level !== "number" || isNaN(reported.level) || reported.level < 0) return read
+  if (typeof reported.effect !== "number" || isNaN(reported.effect) || reported.effect < 0) return read
+  var out = {
+    level: reported.level !== currentLevel ? "apply" : "keep",
+    effect: reported.effect !== currentEffect ? "apply" : "keep",
+    read: false
+  }
+  if (out.level === "keep" && out.effect === "keep") out.read = true
+  return out
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     osdSummonOutcome: osdSummonOutcome,
     osdFallbackCommand: osdFallbackCommand,
+    parseExternalState: parseExternalState,
+    externalStateAction: externalStateAction,
     parseTransportState: parseTransportState,
     transportStatus: transportStatus,
     keyboardFrom: keyboardFrom,
