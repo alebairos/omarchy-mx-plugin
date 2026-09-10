@@ -11,7 +11,31 @@ merged to only from a branch whose CI is green.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.2.0] — 2026-09-10
+
+Both of the keyboard's own keys now raise the on-screen display instantly,
+the display survives Omarchy `4.0.0.r2095`'s plugin-API change, and the
+widget is tested the way Omarchy tests itself. Includes everything listed
+under 1.1.0, which was never tagged on its own.
+
+
 ### Fixed
+
+- **The on-screen display stopped appearing on Omarchy
+  `4.0.0.r2095`.** That release narrowed the plugin shell API: a
+  third-party plugin may summon another only if it owns the target, is a
+  clone of one of four first-party plugins, or declares the `bar` kind —
+  which means *replacing* the bar, not being a `bar-widget` on it. No
+  manifest a bar widget can write satisfies any of the three, so
+  `summon("omarchy.osd")` returned `false` and opened nothing, silently:
+  the denial logs no warning, so the keyboard, the Solaar rules, the IPC
+  call and the widget's own state all kept working and only the OSD went
+  missing. The native call is still tried first and the shell's ungated
+  CLI (`omarchy-shell shell summon`) covers the refusal, so this
+  disappears by itself if the gate is ever widened. See
+  [`specs/research/osd-summon-gate.md`](specs/research/osd-summon-gate.md).
 
 - **The keyboard's brightness keys (F4/F5) raise the OSD as instantly as the
   effect key.** They had been left paying the 2.0–2.3s device read that the
@@ -33,26 +57,6 @@ merged to only from a branch whose CI is green.
   fires — silently, with a clean journal. Restarting Solaar
   (`systemctl --user restart app-solaar@autostart.service`) re-enumerates it.
 
-### Internal
-
-- **Two test tiers in the shape of Omarchy's own `test/shell` and
-  `test/acceptance`.** `npm run test:shell` launches the real
-  `MxQuickControl.qml` in a throwaway `quickshell` under a fake bar and the
-  fake transport and drives it with QtTest's `TestEvent` — a click on the
-  bar icon opens the panel, a click on the slider writes level 7, a click on
-  the toggle writes level 0, a reported `3:2` applies both values and asks
-  for two OSDs without a read, Escape closes — then asserts from the fake's
-  log that exactly two reads and two writes were sent. Beside it: every
-  glyph the QML draws exists in an installed font, the QML parses, and the
-  generated rules fire for captured frames when evaluated by Solaar's own
-  `diversion` engine (the check that separates "the rule is wrong" from
-  "Solaar is not evaluating"). `npm run test:acceptance` runs inside a live
-  session: the panel is proven on screen via `hyprctl` layers and to say
-  "Backlight" via OCR, the OSD layer is proven to appear for a reported
-  level with no device read, and one brightness write is checked against
-  one read of device truth, with a screenshot per step. Each file skips,
-  saying why, on a machine that lacks what it needs, so CI runs the tier
-  without a desktop and the scripts stay honest about coverage.
 
 - **Effect switching no longer writes over LEDs it failed to clear.** The
   backlight is blanked between effects to stop the previous effect's last
@@ -109,6 +113,27 @@ merged to only from a branch whose CI is green.
   The old single `deviceChanged` rule keeps working, so an existing
   `~/.config/solaar/rules.yaml` from 1.0.0 needs no edit to keep behaving as
   it does today.
+
+### Internal
+
+- **Two test tiers in the shape of Omarchy's own `test/shell` and
+  `test/acceptance`.** `npm run test:shell` launches the real
+  `MxQuickControl.qml` in a throwaway `quickshell` under a fake bar and the
+  fake transport and drives it with QtTest's `TestEvent` — a click on the
+  bar icon opens the panel, a click on the slider writes level 7, a click on
+  the toggle writes level 0, a reported `3:2` applies both values and asks
+  for two OSDs without a read, Escape closes — then asserts from the fake's
+  log that exactly two reads and two writes were sent. Beside it: every
+  glyph the QML draws exists in an installed font, the QML parses, and the
+  generated rules fire for captured frames when evaluated by Solaar's own
+  `diversion` engine (the check that separates "the rule is wrong" from
+  "Solaar is not evaluating"). `npm run test:acceptance` runs inside a live
+  session: the panel is proven on screen via `hyprctl` layers and to say
+  "Backlight" via OCR, the OSD layer is proven to appear for a reported
+  level with no device read, and one brightness write is checked against
+  one read of device truth, with a screenshot per step. Each file skips,
+  saying why, on a machine that lacks what it needs, so CI runs the tier
+  without a desktop and the scripts stay honest about coverage.
 
 ## [1.1.0] — 2026-09-07
 
