@@ -288,27 +288,102 @@ test("a malformed effect argument never becomes effect NaN", () => {
   }
 })
 
-test("every Solaar rule passes the effect its own test matched", () => {
-  // solaar-rule.yaml is generated: 16 near-identical rules where the only
-  // thing distinguishing them is a number repeated in two places. A copy
-  // that drifted would fire the wrong OSD for one effect and nothing would
-  // catch it by eye, so the pairing is asserted rather than trusted.
-  const rules = fs.readFileSync(path.join(__dirname, "..", "solaar-rule.yaml"), "utf8")
-  const pairs = [...rules.matchAll(
-    /TestBytes: \[3, 4, (\d+), (\d+)\]\n\s*- Execute: \[[^\]]*externalEffect, "(\d+)"\]/g)]
+// ------------------------------------------------------- the generated rules
 
-  assert.equal(pairs.length, 16, "expected one rule per effect index 0-15")
-  for (const [, lo, hi, passed] of pairs) {
-    assert.equal(lo, hi, `TestBytes range must match a single value, got ${lo}-${hi}`)
-    assert.equal(passed, lo, `rule testing effect ${lo} passes ${passed}`)
+const Rules = require("./solaar-rules.js")
+
+test("solaar-rule.yaml is exactly what the generator produces", () => {
+  // 128 near-identical rules whose only content is two numbers repeated in
+  // three places each. The file is asserted against its source so a hand
+  // edit that tests one value and passes another cannot survive CI.
+  const onDisk = fs.readFileSync(path.join(__dirname, "..", "solaar-rule.yaml"), "utf8")
+  assert.equal(onDisk, Rules.render(), "run `npm run rules` and commit the result")
+})
+
+test("every rule passes exactly the level and effect its own tests matched", () => {
+  const rules = Rules.render()
+  const triples = [...rules.matchAll(
+    /TestBytes: \[1, 2, (\d+), (\d+)\]\n\s*- TestBytes: \[3, 4, (\d+), (\d+)\]\n\s*- Execute: \[[^\]]*externalState, "(\d+):(\d+)"\]/g)]
+  assert.equal(triples.length, Rules.LEVELS * Rules.EFFECTS, "one rule per (level, effect) pair")
+  for (const [, l0, l1, e0, e1, pl, pe] of triples) {
+    assert.equal(l0, l1, `level test must match a single value, got ${l0}-${l1}`)
+    assert.equal(e0, e1, `effect test must match a single value, got ${e0}-${e1}`)
+    assert.equal(pl, l0, `rule testing level ${l0} passes level ${pl}`)
+    assert.equal(pe, e0, `rule testing effect ${e0} passes effect ${pe}`)
   }
-  assert.deepEqual(pairs.map((m) => Number(m[1])), [...Array(16).keys()],
-    "effects 0-15 must each have exactly one rule, in order")
+  assert.deepEqual(triples.map((m) => [Number(m[1]), Number(m[3])]), Rules.pairs(),
+    "every pair exactly once, in generator order")
+})
 
-  // The catch-all must come last: Solaar stops at the first rule whose
-  // Execute runs (diversion.py, _evaluate), so a catch-all placed earlier
-  // would shadow every per-effect rule and reinstate the slow path.
+test("the level test reads data[1] and the effect test data[3]", () => {
+  // The offsets are the whole contract with Solaar. They were established by
+  // evaluating captured frames through logitech_receiver.diversion itself:
+  // make_notification hands the engine data[2:], so [08 04 05 00] has the
+  // level at 1 and the effect at 3. A rule testing any other byte would
+  // still parse, still load, and silently never fire.
+  const rules = Rules.render()
+  assert.ok(!/TestBytes: \[(?!1, 2,|3, 4,)/.test(rules), "only [1,2] and [3,4] byte ranges may be tested")
+})
+
+test("the deviceChanged catch-all is the last rule", () => {
+  // Solaar stops at the first rule whose Execute runs (diversion.py,
+  // _evaluate), so a catch-all placed earlier would shadow every pair rule
+  // and reinstate the slow path for both keys.
+  const rules = Rules.render()
   const catchAll = rules.lastIndexOf("deviceChanged]")
   const lastTest = rules.lastIndexOf("TestBytes:")
   assert.ok(catchAll > lastTest, "the deviceChanged fallback must be the last rule")
+  assert.equal((rules.match(/deviceChanged\]/g) || []).length, 1, "exactly one catch-all")
+})
+
+// ------------------------------------------------ device-reported full state
+
+test("a state literal parses to two integers and nothing else does", () => {
+  assert.deepEqual(M.parseExternalState("4:3"), { level: 4, effect: 3 })
+  assert.deepEqual(M.parseExternalState("0:0"), { level: 0, effect: 0 })
+  assert.deepEqual(M.parseExternalState(" 7:15 "), { level: 7, effect: 15 })
+  for (const bad of ["4", "4:", ":3", "4:3:1", "a:b", "-1:3", "", null, undefined, "4,3"]) {
+    assert.equal(M.parseExternalState(bad), null, `${JSON.stringify(bad)} must not parse`)
+  }
+})
+
+test("a moved level is applied and announced without a read", () => {
+  // The point of the 128-rule file: brightness from F4/F5 no longer costs
+  // the 2s device read that the effect-only rules left it paying.
+  assert.deepEqual(M.externalStateAction({ level: 5, effect: 3 }, 4, 3, true),
+    { level: "apply", effect: "keep", read: false })
+})
+
+test("a moved effect is applied and announced without a read", () => {
+  assert.deepEqual(M.externalStateAction({ level: 4, effect: 6 }, 4, 3, true),
+    { level: "keep", effect: "apply", read: false })
+})
+
+test("both moving applies both, still without a read", () => {
+  assert.deepEqual(M.externalStateAction({ level: 1, effect: 0 }, 4, 3, true),
+    { level: "apply", effect: "apply", read: false })
+})
+
+test("a report where nothing moved is the one case that still reads", () => {
+  // Something this rule cannot name changed -- the mode, say. That is
+  // exactly the pre-existing behaviour, now confined to the rare case.
+  assert.deepEqual(M.externalStateAction({ level: 4, effect: 3 }, 4, 3, true),
+    { level: "keep", effect: "keep", read: true })
+})
+
+test("a state reported before any device is known falls back to a read", () => {
+  assert.deepEqual(M.externalStateAction({ level: 5, effect: 3 }, 0, -1, false),
+    { level: "keep", effect: "keep", read: true })
+})
+
+test("an unusable state never applies anything", () => {
+  // NaN !== current would otherwise read as "apply" and publish an OSD for
+  // a level that does not exist.
+  for (const bad of [null, undefined, {}, { level: NaN, effect: 3 }, { level: 4, effect: -1 },
+                     { level: "4", effect: 3 }, { level: 4 }]) {
+    const a = M.externalStateAction(bad, 4, 3, true)
+    assert.equal(a.level, "keep", `${JSON.stringify(bad)} must not apply a level`)
+    assert.equal(a.effect, "keep", `${JSON.stringify(bad)} must not apply an effect`)
+    assert.equal(a.read, true, `${JSON.stringify(bad)} must fall back to a read`)
+  }
 })
