@@ -266,8 +266,35 @@ function shouldTrustKeyboardLoss(hadKeyboardBefore, consecutiveMisses) {
   return consecutiveMisses >= missesBeforeBelievingLoss
 }
 
+// Omarchy narrowed the plugin shell API in 4.0.0.r2095 (2026-09-10):
+// `shell.summon` from a third-party plugin now requires the caller to own
+// the target, to declare the `bar` kind (which means *replacing* the bar --
+// `bar-widget` does not qualify), or to be a clone of one of four
+// first-party plugins. This widget is none of those, so summoning
+// `omarchy.osd` returns false and the OSD silently never appears; there is
+// no warning, because the denial is a bare `return false`.
+//
+// The shell's own CLI is not gated, so the OSD stays reachable through it.
+// The decision is kept here, rather than as an `if` in the QML, so that
+// "only fall back when the shell actually refused" is executable: a
+// summon that worked must not also spawn a process, and any answer that is
+// not an explicit success has to be treated as a refusal, since older
+// shells and future ones may return undefined rather than a boolean.
+function osdSummonOutcome(summonResult) {
+  return summonResult === true ? "summoned" : "fallback"
+}
+
+// `omarchy-shell shell summon <id> <payloadJson>` -- the same entry point
+// the shell's CLI exposes to any process, taking the identical payload, so
+// the fallback cannot drift from the native call it stands in for.
+function osdFallbackCommand(payloadJson) {
+  return ["omarchy-shell", "shell", "summon", "omarchy.osd", String(payloadJson || "")]
+}
+
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {
+    osdSummonOutcome: osdSummonOutcome,
+    osdFallbackCommand: osdFallbackCommand,
     parseTransportState: parseTransportState,
     transportStatus: transportStatus,
     keyboardFrom: keyboardFrom,

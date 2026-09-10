@@ -254,3 +254,38 @@ test("a degraded frame never yields a zero level count the UI could believe", ()
   assert.equal(parsed.devices.length, 0)
   assert.equal(parsed.ok, false)
 })
+
+// Omarchy 4.0.0.r2095 made summon() refuse this widget, and refused
+// silently: no warning, no exception, just an OSD that stopped appearing.
+// These pin the two halves of the fallback -- when it triggers, and what it
+// runs -- because neither is observable from the QML side without a shell.
+
+test("only an explicit success counts as summoned", () => {
+  assert.equal(M.osdSummonOutcome(true), "summoned")
+})
+
+test("every answer that is not true is treated as a refusal", () => {
+  // The gate returns a bare `false`, but PluginShellApi returns `false` for
+  // a missing binding too, and a future shell could return undefined or a
+  // status object. Anything unrecognised must fall back rather than assume
+  // an OSD appeared: a spurious fallback shows the OSD twice at worst, and
+  // a missed one is the bug this fixes.
+  for (const answer of [false, undefined, null, 0, "", "true", 1, {}]) {
+    assert.equal(M.osdSummonOutcome(answer), "fallback",
+      `${JSON.stringify(answer)} must not be read as a successful summon`)
+  }
+})
+
+test("the fallback runs the shell's own summon with the identical payload", () => {
+  const payload = JSON.stringify({ icon: "keyboard", message: "Backlight: Wave" })
+  assert.deepEqual(M.osdFallbackCommand(payload),
+    ["omarchy-shell", "shell", "summon", "omarchy.osd", payload])
+})
+
+test("the fallback never passes a null payload to the shell", () => {
+  // argv holes become the literal string "undefined" once Process spawns
+  // them, which the OSD then parses as a message.
+  for (const empty of [undefined, null, ""]) {
+    assert.equal(M.osdFallbackCommand(empty)[4], "")
+  }
+})
