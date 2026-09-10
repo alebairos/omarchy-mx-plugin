@@ -578,6 +578,14 @@ Panel {
       root.announceExternalChange = true
       root.refresh()      // refresh(), not refreshEffect() -- see deviceChanged
     }
+    // The same notification, with BOTH values Solaar had in hand: "L:E".
+    //
+    // The generated rules enumerate every (level, effect) pair, so the
+    // brightness keys reach here as instantly as the effect key does. The
+    // widget decides which value moved by comparison, because the report
+    // does not say which key was pressed -- see Model.externalStateAction.
+    // externalEffect above stays for anyone still running the 16-rule file.
+    function externalState(value: string): void { root.applyExternalState(value) }
     function level(value: string): void { root.setBrightness(parseInt(value, 10)) }
     function status(): string {
       if (!root.hasKeyboard) return "no backlight-capable device (devices=" + root.devices.length + ")"
@@ -676,6 +684,27 @@ Panel {
   function refreshEffect() {
     if (!hasKeyboard) return
     refresh()
+  }
+
+  function applyExternalState(value) {
+    var reported = Model.parseExternalState(value)
+    var action = Model.externalStateAction(reported, backlightLevel, effectIndex, hasKeyboard)
+    if (action.level === "apply") {
+      backlightLevel = reported.level              // optimistic, like the panel's own writes
+      if (reported.level > 0) lastOnLevel = reported.level
+      showBacklightOsd(reported.level)
+    }
+    if (action.effect === "apply") {
+      effectIndex = reported.effect
+      showEffectOsd(reported.effect)
+    }
+    // Nothing this rule can name moved, or the report was unusable: the old
+    // path. refresh(), not refreshEffect() -- a notification is proof the
+    // keyboard is alive, see deviceChanged.
+    if (action.read) {
+      announceExternalChange = true
+      refresh()
+    }
   }
 
   function showEffectOsd(index) {

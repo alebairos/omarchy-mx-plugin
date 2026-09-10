@@ -41,11 +41,13 @@ built-in ones — nothing extra to configure.
 | <kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd> | Move to the next/previous panel |
 
 Your keyboard's own backlight keys (**F4** and **F5** on the MX Mechanical
-Mini, pressed without Fn) keep working exactly as they always did — they are
-handled by the keyboard's firmware, not by this widget. The widget is not
-told about those presses as they happen, so it picks the new level up the
-next time you open the panel. No on-screen display appears for them, unlike
-changes made from the panel itself.
+Mini, pressed without Fn, and the effect key on Fn+lamp) keep working exactly
+as they always did — they are handled by the keyboard's firmware, not by this
+widget. Out of the box the widget is not told about those presses as they
+happen, so it picks the new value up the next time you open the panel, and no
+on-screen display appears for them. With the optional Solaar rule installed
+(see *Known limitations*), both keys show the same on-screen display as the
+panel, in under 100ms, with no device read.
 
 **The summon number is positional, not fixed to this plugin.** It counts
 visible panels in the bar's right section from the left, skipping widgets
@@ -185,13 +187,19 @@ All three are optional; omit them and the defaults apply.
   Solaar, and the panel follows the hardware keys and shows an on-screen
   display for them. Nothing breaks without it.
 
-  With that rule installed, **the effect key is the one action that costs no
-  device read**: its value travels inside the notification, so the OSD
-  appears in under 100ms rather than the ~2s below, and the device is not
-  contacted at all. Brightness from F4/F5 does
-  still cost a read — the notification reports the whole backlight state
-  rather than what moved, so the widget can tell the effect changed but has
-  to ask the device what the new level is.
+  With that rule installed, **the hardware keys are the actions that cost no
+  device read**: both the level and the effect travel inside the
+  notification, so the OSD appears in under 100ms rather than the ~2s above,
+  and the device is not contacted at all. The file is 128 rules — one per
+  (level, effect) pair — because Solaar fires exactly one rule per
+  notification and cannot substitute values into a command, so each pair has
+  to be its own rule. It is generated (`npm run rules`) and asserted by the
+  test suite, not hand-maintained.
+
+  If the keys stop raising the OSD after heavy use of `solaar show` or the
+  plugin's own transport, restart Solaar before suspecting the rules:
+  contention can make its feature-table read for the keyboard fail, and with
+  no feature table `Feature: BACKLIGHT2` silently never matches.
 - **Effects are only exposed for keyboards that report them.** The list
   comes from the device's own capability bitmap, so a keyboard that
   advertises no effects simply gets no effect row.
