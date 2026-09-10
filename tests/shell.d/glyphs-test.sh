@@ -15,7 +15,10 @@ command -v fc-list >/dev/null 2>&1 || skip "fontconfig (fc-list) not installed; 
 # fontconfig alone is not enough: a machine with fonts but no Nerd Font (a
 # stock CI runner) would fail every glyph, which says nothing about the
 # code. CI installs one before this tier so the check is real there too.
-fc-list | grep -qi "nerd font" || skip "no Nerd Font installed; glyph coverage needs one (Omarchy ships JetBrainsMono Nerd Font)"
+# Not `grep -q`: under `set -o pipefail` it exits on the first match, fc-list
+# takes SIGPIPE, the pipeline "fails", and the test skips on a machine that
+# has the font -- which is exactly what it did, twice, before this comment.
+fc-list | grep -i "nerd font" >/dev/null || skip "no Nerd Font installed; glyph coverage needs one (Omarchy ships JetBrainsMono Nerd Font)"
 require_command python3
 
 codepoints=$(python3 - "$ROOT" <<'PY'
