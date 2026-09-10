@@ -275,12 +275,50 @@ Panel {
   function showBacklightOsd(level) {
     if (!bar || !bar.shell) return
     var max = levelMaxByDevice[keyboardIndex] !== undefined ? levelMaxByDevice[keyboardIndex] : 7
-    bar.shell.summon("omarchy.osd", JSON.stringify({
+    summonOsd(JSON.stringify({
       icon: "keyboard",
       value: level,
       max: max,
       progressText: level > 0 ? (level + "/" + max) : "Off"
     }))
+  }
+
+  // Omarchy 4.0.0.r2095 (2026-09-10) narrowed the plugin shell API. A
+  // third-party plugin may summon another only if it owns the target, if it
+  // is a clone of omarchy.audio/media/monitor/network reaching that clone's
+  // allowlisted targets, or if it declares the `bar` kind -- and `bar` means
+  // a plugin that *replaces* the bar, not a `bar-widget` that sits on it
+  // (shell.qml: barPluginMayControl -> pluginHasBarCapabilities). This
+  // widget matches none of the three, so summon("omarchy.osd") returns
+  // false and no OSD opens.
+  //
+  // Nothing is logged when that happens -- the denial is a bare
+  // `return false` -- so the only symptom is an OSD that stopped appearing
+  // after an omarchy upgrade, with a clean journal and a widget whose own
+  // state still tracks the keyboard perfectly. Diagnosed by driving
+  // `externalEffect` over IPC and watching `omarchy-shell osd state` stay
+  // `closed` while the widget's effect advanced.
+  //
+  // `omarchy-shell shell summon` reaches the same shell function from
+  // outside, where the gate does not apply. The native call is still tried
+  // first: it costs nothing where it is permitted, and this fallback stops
+  // being used by itself if the gate is ever widened again.
+  function summonOsd(payloadJson) {
+    if (Model.osdSummonOutcome(bar.shell.summon("omarchy.osd", payloadJson)) === "summoned") return
+    queuedOsdPayload = payloadJson
+    drainOsd()
+  }
+
+  // Latest-wins, like every other queue in this file: holding the keyboard's
+  // brightness key emits a notification per step, and the OSD that matters
+  // is the level the user stopped on, not whichever spawn won the race.
+  property string queuedOsdPayload: ""
+
+  function drainOsd() {
+    if (osdProc.running || queuedOsdPayload === "") return
+    osdProc.command = Model.osdFallbackCommand(queuedOsdPayload)
+    queuedOsdPayload = ""
+    osdProc.running = true
   }
 
   // Setting Process.running = true while it is already running is a no-op
@@ -491,6 +529,14 @@ Panel {
   }
 
   Process {
+    id: osdProc
+    // Deferred for the same reason as drainQueued(): a Process still reads
+    // as running inside its own onExited, so a direct call would re-queue
+    // the payload instead of dispatching it.
+    onExited: Qt.callLater(root.drainOsd)
+  }
+
+  Process {
     id: effectSetProc
     onExited: function(exitCode) {
       if (exitCode !== 0) Qt.callLater(root.refreshEffect)
@@ -642,7 +688,7 @@ Panel {
 
   function showEffectOsd(index) {
     if (!bar || !bar.shell) return
-    bar.shell.summon("omarchy.osd", JSON.stringify({
+    summonOsd(JSON.stringify({
       icon: "keyboard",
       message: "Backlight: " + Model.effectLabel(index)
     }))

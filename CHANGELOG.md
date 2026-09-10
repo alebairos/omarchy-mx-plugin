@@ -11,6 +11,22 @@ merged to only from a branch whose CI is green.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The on-screen display stopped appearing on Omarchy
+  `4.0.0.r2095`.** That release narrowed the plugin shell API: a
+  third-party plugin may summon another only if it owns the target, is a
+  clone of one of four first-party plugins, or declares the `bar` kind —
+  which means *replacing* the bar, not being a `bar-widget` on it. No
+  manifest a bar widget can write satisfies any of the three, so
+  `summon("omarchy.osd")` returned `false` and opened nothing, silently:
+  the denial logs no warning, so the keyboard, the Solaar rules, the IPC
+  call and the widget's own state all kept working and only the OSD went
+  missing. The native call is still tried first and the shell's ungated
+  CLI (`omarchy-shell shell summon`) covers the refusal, so this
+  disappears by itself if the gate is ever widened. See
+  [`specs/research/osd-summon-gate.md`](specs/research/osd-summon-gate.md).
+
 Remaining before `1.0.0`: vertical-bar layout, on-screen display when the
 level changes, a targeted refresh when the panel opens, per-instance
 settings from `shell.json`, an explicit "Solaar not installed" state, and a
