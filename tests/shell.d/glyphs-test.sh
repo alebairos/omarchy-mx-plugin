@@ -12,6 +12,10 @@ set -euo pipefail
 source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/base-test.sh"
 
 command -v fc-list >/dev/null 2>&1 || skip "fontconfig (fc-list) not installed; glyph coverage needs it"
+# fontconfig alone is not enough: a machine with fonts but no Nerd Font (a
+# stock CI runner) would fail every glyph, which says nothing about the
+# code. CI installs one before this tier so the check is real there too.
+fc-list | grep -qi "nerd font" || skip "no Nerd Font installed; glyph coverage needs one (Omarchy ships JetBrainsMono Nerd Font)"
 require_command python3
 
 codepoints=$(python3 - "$ROOT" <<'PY'
