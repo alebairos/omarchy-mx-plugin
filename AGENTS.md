@@ -67,6 +67,34 @@ native beside the built-ins. Those are real and cannot be automated here.
 - **`.pragma library` breaks node's parser.** `Model.js` is loaded by both
   QML and the test runner, so it must stay plain JavaScript.
 
+## Polling the device during diagnosis is not read-only
+
+The receiver is one contended resource, and Solaar is reading it too. On
+2026-09-10 an hour went into a "the Solaar rules stopped firing" hunt in
+which the rules, the byte offsets, the `Execute` command and the IPC endpoint
+were each proven correct in turn. The actual cause was the diagnosis itself:
+repeated `mx-device state` and `solaar show` calls, fired while Solaar was
+enumerating the keyboard, made its feature-set read fail. With no feature
+table, `Feature: BACKLIGHT2` can never resolve, so no rule fires -- not the
+fast ones, not the catch-all -- silently, with a clean journal. Solaar does
+not retry or recover on its own.
+
+- **Prefer instruments that never touch the device.** The widget's IPC
+  `status`, the OSD's `state`, and a second reader on `/dev/hidraw2` (hidraw
+  queues per open descriptor, so it observes without stealing) all cost the
+  device nothing. Reach the hardware only for a deliberate, single read.
+- **After any burst of device polling, restart Solaar before concluding
+  anything about the rules:** `systemctl --user restart
+  app-solaar@autostart.service` (that is the unit name; there is no
+  `solaar.service`). Then confirm `solaar show` lists `BACKLIGHT2`.
+- **To test whether the rules would fire, do not press keys -- evaluate.**
+  Load the rules file through `logitech_receiver.diversion` and run each
+  leaf rule's conditions against a captured frame via `make_notification`.
+  It answers in milliseconds, needs no human, and separates "the rule is
+  wrong" from "Solaar is not evaluating" cleanly. Note `D.rules.components`
+  is nested one level -- `[<the file's rules>, <built-ins>]` -- so a flat
+  iteration reports two rules and looks alarming for no reason.
+
 ## Do not trust a green test suite
 
 Before claiming a test protects something, break the code and watch it
