@@ -19,15 +19,30 @@
 # one read to prove the restore actually landed -- the widget's own status
 # is optimistic and is not evidence (CONTRIBUTING.md).
 #
-# Usage:  bash specs/005-marketplace-listing/capture-preview.sh [outfile]
-#         RESTORE_LEVEL=1 bash ... capture-preview.sh   # if the widget's
-#         idea of the current level is already wrong when you start
+# Usage:  capture-preview.sh [--in SECONDS] [outfile]
+#
+#   --in N   wait N seconds before checking the screen and capturing, so you
+#            can start this from a terminal and then switch to an empty
+#            workspace. Without it the terminal you typed into is itself a
+#            window on the visible workspace, and the check below refuses.
+#
+#   RESTORE_LEVEL=n   use n as the level to restore, when the widget's idea
+#                     of the current level is already wrong when you start.
 
 set -euo pipefail
 
 PLUGIN_ID="alebairos.mx-quick-control"
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-OUT="${1:-$ROOT/preview.png}"
+DELAY=0
+OUT=""
+while (( $# )); do
+  case $1 in
+    --in) DELAY=${2:?--in needs a number of seconds}; shift 2 ;;
+    -h|--help) sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) OUT=$1; shift ;;
+  esac
+done
+OUT="${OUT:-$ROOT/preview.png}"
 TMP=$(mktemp -d)
 PAD=28          # logical px of breathing room around the union
 MID=5           # mid-travel, so the slider is not at either stop
@@ -88,14 +103,23 @@ echo "will restore level to: $ORIG"
 
 SPECIAL=$(hyprctl -j monitors | jq -r '.[] | select(.focused) | .specialWorkspace.name // ""')
 
+# Only put the level back if we actually moved it. Refusing early must cost
+# the device nothing: AGENTS.md counts every contact, and a restore that
+# writes a value the device already holds is still a contact.
+WROTE_LEVEL=0
+
 restore() {
   widget close >/dev/null 2>&1 || true
   if [[ -n $SPECIAL ]]; then
     echo "restoring $SPECIAL"
     hypr "hl.dsp.workspace.toggle_special(\"${SPECIAL#special:}\")" || true
   fi
-  echo "restoring level $ORIG (device write 2 of 2)"
-  widget level "$ORIG" >/dev/null 2>&1 || true
+  if (( WROTE_LEVEL )); then
+    echo "restoring level $ORIG (device write 2 of 2)"
+    widget level "$ORIG" >/dev/null 2>&1 || true
+  else
+    echo "device was never written; nothing to restore"
+  fi
   rm -rf "$TMP"
 }
 trap restore EXIT
@@ -107,13 +131,25 @@ if [[ -n $SPECIAL ]]; then
   sleep 1.5
 fi
 
+if (( DELAY > 0 )); then
+  echo "switch to an empty workspace now; capturing in ${DELAY}s"
+  for (( i = DELAY; i > 0; i-- )); do printf '\r  %2ds ' "$i"; sleep 1; done
+  printf '\r        \r'
+fi
+
 ws=$(hyprctl -j activeworkspace | jq -r .name)
 occupied=$(hyprctl -j clients | jq --arg ws "$ws" '[.[] | select(.workspace.name == $ws)] | length')
-(( occupied == 0 )) || die "$occupied window(s) on workspace $ws. This image is published; \
-switch to an empty workspace so nothing private is in frame."
+if (( occupied != 0 )); then
+  hyprctl -j clients | jq -r --arg ws "$ws" '.[] | select(.workspace.name == $ws) | "    \(.class)  \(.title[0:50])"' >&2
+  die "$occupied window(s) on workspace $ws, listed above. This image is published to a public
+listing, so whatever is on screen goes with it. The terminal you are typing in counts -- rerun as
+  $(basename "${BASH_SOURCE[0]}") --in 10
+and switch to an empty workspace while it counts down."
+fi
 
 # ------------------------------------------------------- device write 1 of 2
 echo "setting level $MID (device write 1 of 2)"
+WROTE_LEVEL=1
 widget level "$MID" >/dev/null
 sleep 3
 
