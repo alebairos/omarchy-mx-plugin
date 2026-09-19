@@ -301,6 +301,33 @@ backlight level from its exit trap unconditionally, so a run that bailed
 out before touching the keyboard still issued a write on the way out. The
 restore is now guarded by whether the mid-level write actually happened.
 
+### What the first real capture got wrong
+
+It succeeded, and it was still wrong twice over. Both are now handled, but
+both are worth knowing because neither announces itself.
+
+**The bar poisons the frame difference.** The image came out 1889px wide
+when the panel is a few hundred. The diff had picked up the clock, at the
+far left of the bar, which had simply ticked between the two frames. Any
+self-updating bar widget does this: clock, weather, system-update, tray.
+The panel is never inside the bar, so the bar cannot help locate it and can
+only drag the bounding box across the screen. The diff is now taken below
+the bar only, and the script warns if the derived panel still comes out
+wider than half the monitor.
+
+**The wallpaper is not necessarily yours to publish.** The capture is taken
+against whatever background the current Omarchy theme sets, and that image
+is republished by the marketplace as the listing card. The reference
+session was on a `wallhaven-*` theme, whose background is a third-party
+illustration from wallhaven.cc. That directly contradicts the submission
+checklist's "I own or have permission to submit this plugin and its preview
+assets."
+
+Switch to a theme that ships with Omarchy before the capture that is
+actually published -- Tokyo Night, Nord, Kanagawa, Matte Black and the rest
+of the built-in set are all safe, and a plain dark one flatters the panel
+anyway. `omarchy-theme-bg-current` names the background in force.
+
 ### The device, and proving the restore
 
 Set the level to mid-travel before capturing so the slider is not at either

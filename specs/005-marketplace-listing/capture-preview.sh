@@ -163,19 +163,35 @@ wait_until "panel is on screen" 15 layer_on_screen "omarchy-keyboard-panel"
 sleep 2
 shot "$TMP/open.png"
 
-box=$(magick "$TMP/closed.png" "$TMP/open.png" -compose difference -composite \
-        -colorspace Gray -threshold 8% -format '%@' info:)
-echo "changed region (${SCALE}x px): $box"
-[[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]] \
-  || die "could not derive the panel bounds from the frame difference"
-PW=${BASH_REMATCH[1]}; PH=${BASH_REMATCH[2]}; PX=${BASH_REMATCH[3]}; PY=${BASH_REMATCH[4]}
-
 read -r MW MH < <(hyprctl -j monitors | jq -r '.[] | select(.focused) |
   "\((if (.transform // 0) % 2 == 1 then .height else .width end) / .scale | round) \((if (.transform // 0) % 2 == 1 then .width else .height end) / .scale | round)"')
 BH=$(hyprctl -j layers | jq -r '[.. | objects | select(.namespace? == "omarchy-bar")][0].h')
 
-# Everything below is in captured (SCALE x) pixels: the diff box already is.
+# Everything below is in captured (SCALE x) pixels.
 PADP=$((PAD * SCALE)); BARH=$((BH * SCALE)); MWP=$((MW * SCALE)); MHP=$((MH * SCALE))
+
+# Diff BELOW the bar only. The bar is full of things that change on their own
+# between two frames a few seconds apart -- the clock ticking is enough -- and
+# any of them drags the bounding box across the whole screen. The first real
+# capture came out 1889px wide for exactly that reason: the clock, at the far
+# left, had changed. The panel is never in the bar, so the bar cannot help
+# locate it and can only mislead.
+body="${MWP}x$((MHP - BARH))+0+${BARH}"
+magick "$TMP/closed.png" -crop "$body" +repage "$TMP/closed-body.png"
+magick "$TMP/open.png"   -crop "$body" +repage "$TMP/open-body.png"
+
+box=$(magick "$TMP/closed-body.png" "$TMP/open-body.png" -compose difference -composite \
+        -colorspace Gray -threshold 8% -format '%@' info:)
+echo "changed region below the bar (${SCALE}x px): $box"
+[[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]] \
+  || die "could not derive the panel bounds from the frame difference"
+PW=${BASH_REMATCH[1]}; PH=${BASH_REMATCH[2]}; PX=${BASH_REMATCH[3]}
+PY=$(( ${BASH_REMATCH[4]} + BARH ))   # back into full-frame coordinates
+
+# A panel that appears to span most of the screen means something else moved.
+# Say so rather than silently shipping a picture of the whole desktop.
+(( PW < MWP / 2 )) || echo "WARNING: derived panel is ${PW}px wide, over half the screen. \
+Something other than the panel changed between frames; check the output before using it." >&2
 
 X1=$PX; Y1=0                       # include the bar strip above the panel
 X2=$((PX + PW)); Y2=$((PY + PH))
