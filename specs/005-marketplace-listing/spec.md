@@ -255,6 +255,28 @@ hyprctl repl 'local t={} for k,v in pairs(hl.dsp.workspace) do t[#t+1]=k end
 Note that `hl.dsp.dpms` is a function where `hl.dsp.workspace` is a table,
 so iterating it raises `table expected, got function`.
 
+### Getting a blank backdrop: what does not work
+
+The visible workspace has to be empty, because the frame is published. Two
+plausible shortcuts were tried and neither works:
+
+- **An empty special workspace does not blank the screen.** Toggling one on
+  overlays nothing and leaves every window on the workspace beneath fully
+  visible. A capture taken this way contained the author's open mail client.
+- **There is no "switch to workspace N" in `hl.dsp.workspace`.** Its members
+  are `change_id`, `move`, `rename`, `swap_monitors`, `toggle_special`.
+  `change_id` *renames* a workspace (it wants `{ workspace, id }` and
+  answers "no such workspace"), `move` wants a monitor, and `hl.dsp.focus`
+  handles only `direction`, `monitor`, `window`, `urgent_or_last`, `last`.
+  `hl.dsp.send_shortcut({ mods, key })` could replay the user's own
+  workspace keybind, but that depends on their config and is not something
+  this script should assume.
+
+So the script does not try to arrange a blank screen. It asserts the
+condition and refuses, and a person switches to an empty workspace before
+running it. That is one action by someone who can see the screen, against
+an unbounded set of ways to get it wrong on their behalf.
+
 ### The device, and proving the restore
 
 Set the level to mid-travel before capturing so the slider is not at either
