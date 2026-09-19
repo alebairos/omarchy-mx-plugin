@@ -1,0 +1,165 @@
+#!/bin/bash
+#
+# Capture the marketplace preview image. See spec.md in this directory for
+# why each step is the way it is; the short version:
+#
+#   - The panel is drawn inside a FULLSCREEN layer surface, so its layer
+#     rectangle is the whole monitor and is useless as a crop. The drawn
+#     bounds are derived by differencing a closed-panel frame against an
+#     open-panel one: whatever changed is the panel.
+#   - Hyprland 0.56.2 routes `hyprctl dispatch` through Lua. The shell form
+#     `hyprctl dispatch togglespecialworkspace scratchpad` exits 7.
+#   - `grim` blocks forever, rather than failing, when the display is in
+#     DPMS off. Every capture runs under `timeout`.
+#   - The output is committed to a PUBLIC repository and republished by the
+#     marketplace. Anything on screen ships with it, so this refuses to run
+#     unless the visible workspace is empty.
+#
+# Device contact: exactly two writes (mid level, restore) and, at the end,
+# one read to prove the restore actually landed -- the widget's own status
+# is optimistic and is not evidence (CONTRIBUTING.md).
+#
+# Usage:  bash specs/005-marketplace-listing/capture-preview.sh [outfile]
+#         RESTORE_LEVEL=1 bash ... capture-preview.sh   # if the widget's
+#         idea of the current level is already wrong when you start
+
+set -euo pipefail
+
+PLUGIN_ID="alebairos.mx-quick-control"
+ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+OUT="${1:-$ROOT/preview.png}"
+TMP=$(mktemp -d)
+PAD=28          # logical px of breathing room around the union
+MID=5           # mid-travel, so the slider is not at either stop
+SCALE=2         # grim -s: caption text must survive the card downscale
+
+widget() { omarchy-shell "$PLUGIN_ID" "$@"; }
+widget_field() { widget status | grep -oE "$1=[^ ]+" | head -1 | cut -d= -f2; }
+die() { printf 'capture-preview: %s\n' "$1" >&2; exit 1; }
+
+hypr() { hyprctl dispatch "$1" >/dev/null; }   # Lua form; see header
+
+layer_on_screen() {   # same geometry test as tests/acceptance.d/base-test.sh
+  local monitors
+  monitors=$(hyprctl -j monitors) || return 1
+  hyprctl -j layers | jq -e --arg ns "$1" --argjson monitors "$monitors" '
+    to_entries[]
+    | .key as $name | .value as $levels
+    | ($monitors[] | select(.name == $name)) as $m
+    | (if ($m.transform // 0) % 2 == 1 then $m.height else $m.width end) / $m.scale | round as $width
+    | (if ($m.transform // 0) % 2 == 1 then $m.width else $m.height end) / $m.scale | round as $height
+    | [$levels | .. | objects | select(.namespace? == $ns)][]
+    | select(.x + .w > 0 and .x < $width and .y + .h > 0 and .y < $height)
+  ' >/dev/null
+}
+
+wait_until() {
+  local desc="$1" t="$2"; shift 2
+  local deadline=$((SECONDS + t))
+  until "$@" >/dev/null 2>&1; do
+    (( SECONDS >= deadline )) && die "timed out waiting for $desc"
+    sleep 0.2
+  done
+  echo "ok - $desc"
+}
+
+shot() { timeout 20 grim -s "$SCALE" "$1" || die "grim failed or timed out (display asleep?)"; }
+
+# ---------------------------------------------------------------- preconditions
+for c in hyprctl jq grim magick omarchy-shell; do
+  command -v "$c" >/dev/null || die "required command missing: $c"
+done
+
+if omarchy-hyprland-session-locked 2>/dev/null; then
+  die "the session is locked; the lock surface covers the bar. Unlock and re-run."
+fi
+
+if [[ $(hyprctl -j monitors | jq -r '[.[] | select(.focused) | .dpmsStatus] | first') != "true" ]]; then
+  echo "display is in DPMS off; waking it"
+  hypr 'hl.dsp.dpms("on")'
+  sleep 2
+fi
+
+status=$(widget status)
+[[ $status == *"mode="* ]] || die "no backlight-capable keyboard is paired ($status)"
+ORIG="${RESTORE_LEVEL:-$(widget_field level)}"
+echo "widget reports: $status"
+echo "will restore level to: $ORIG"
+
+SPECIAL=$(hyprctl -j monitors | jq -r '.[] | select(.focused) | .specialWorkspace.name // ""')
+
+restore() {
+  widget close >/dev/null 2>&1 || true
+  if [[ -n $SPECIAL ]]; then
+    echo "restoring $SPECIAL"
+    hypr "hl.dsp.workspace.toggle_special(\"${SPECIAL#special:}\")" || true
+  fi
+  echo "restoring level $ORIG (device write 2 of 2)"
+  widget level "$ORIG" >/dev/null 2>&1 || true
+  rm -rf "$TMP"
+}
+trap restore EXIT
+
+# The scratchpad overlay draws over the bar.
+if [[ -n $SPECIAL ]]; then
+  echo "hiding $SPECIAL for the capture"
+  hypr "hl.dsp.workspace.toggle_special(\"${SPECIAL#special:}\")"
+  sleep 1.5
+fi
+
+ws=$(hyprctl -j activeworkspace | jq -r .name)
+occupied=$(hyprctl -j clients | jq --arg ws "$ws" '[.[] | select(.workspace.name == $ws)] | length')
+(( occupied == 0 )) || die "$occupied window(s) on workspace $ws. This image is published; \
+switch to an empty workspace so nothing private is in frame."
+
+# ------------------------------------------------------- device write 1 of 2
+echo "setting level $MID (device write 1 of 2)"
+widget level "$MID" >/dev/null
+sleep 3
+
+# ------------------------------------------- closed frame, open frame, diff
+widget close >/dev/null 2>&1 || true
+sleep 1
+shot "$TMP/closed.png"
+
+widget open >/dev/null
+wait_until "panel is on screen" 15 layer_on_screen "omarchy-keyboard-panel"
+sleep 2
+shot "$TMP/open.png"
+
+box=$(magick "$TMP/closed.png" "$TMP/open.png" -compose difference -composite \
+        -colorspace Gray -threshold 8% -format '%@' info:)
+echo "changed region (${SCALE}x px): $box"
+[[ $box =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]] \
+  || die "could not derive the panel bounds from the frame difference"
+PW=${BASH_REMATCH[1]}; PH=${BASH_REMATCH[2]}; PX=${BASH_REMATCH[3]}; PY=${BASH_REMATCH[4]}
+
+read -r MW MH < <(hyprctl -j monitors | jq -r '.[] | select(.focused) |
+  "\((if (.transform // 0) % 2 == 1 then .height else .width end) / .scale | round) \((if (.transform // 0) % 2 == 1 then .width else .height end) / .scale | round)"')
+BH=$(hyprctl -j layers | jq -r '[.. | objects | select(.namespace? == "omarchy-bar")][0].h')
+
+# Everything below is in captured (SCALE x) pixels: the diff box already is.
+PADP=$((PAD * SCALE)); BARH=$((BH * SCALE)); MWP=$((MW * SCALE)); MHP=$((MH * SCALE))
+
+X1=$PX; Y1=0                       # include the bar strip above the panel
+X2=$((PX + PW)); Y2=$((PY + PH))
+(( Y2 < BARH )) && Y2=$BARH
+X1=$(( X1 - PADP < 0 ? 0 : X1 - PADP ))
+X2=$(( X2 + PADP > MWP ? MWP : X2 + PADP ))
+Y2=$(( Y2 + PADP > MHP ? MHP : Y2 + PADP ))
+W=$((X2 - X1)); H=$((Y2 - Y1))
+echo "crop (${SCALE}x px): ${W}x${H}+${X1}+${Y1}   monitor ${MWP}x${MHP}   bar ${BARH}"
+
+magick "$TMP/open.png" -crop "${W}x${H}+${X1}+${Y1}" +repage "$OUT"
+echo "wrote $OUT"
+magick identify "$OUT"
+
+cat <<'NOTE'
+
+Still to do by hand:
+  1. Look at the image. Nothing private in frame? Widget and panel both legible?
+  2. Confirm the restore landed against the DEVICE, not the widget:
+       mx-device state | jq '[.devices[]|select(.backlight)][0].backlight.level'
+     The widget's own status is optimistic; one restore has already been
+     observed to silently not take.
+NOTE

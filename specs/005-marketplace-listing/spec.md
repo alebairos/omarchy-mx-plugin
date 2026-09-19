@@ -176,33 +176,96 @@ listing keeps showing a version of the interface that no longer exists.
 
 ## The capture procedure
 
-Recorded here rather than added as a script: this runs perhaps once per
-release, and the repository deliberately keeps anything that is not the
-plugin, its tests, or the reasoning behind it out of the user's way
-(see `.gitignore`'s own rationale).
+Written after running it. The first two attempts both produced an unusable
+image, for reasons that are not guessable from the documentation and are
+therefore the useful part of this section.
 
-Reference session: single monitor `DP-1`, 1920x1080, scale 1, bar
-`omarchy-bar` at `0,0 1920x26`, widget in the right section.
+The script is kept at
+[`capture-preview.sh`](./capture-preview.sh), beside this spec rather than
+in the plugin root: it is reasoning about the plugin, not part of it, and
+the repository asks users to review the root as shipped code.
 
-1. Drive the widget over its IPC, never by clicking:
-   `omarchy-shell alebairos.mx-quick-control open`.
-2. Wait for the `omarchy-keyboard-panel` layer to be **on screen**, not
-   merely mapped — the surface stays mapped when parked off-monitor. Reuse
-   the `layer_on_screen` geometry test from
-   `tests/acceptance.d/base-test.sh`.
-3. Read the panel's real geometry from `hyprctl -j layers` and compute the
-   crop as the union of the bar rectangle and the panel rectangle, plus
-   even padding. Do not hardcode pixel offsets; they are wrong on any other
-   monitor.
-4. Capture that region with `grim -g`, at `-s 2` so the panel's caption
-   text survives the marketplace's downscale to a card.
-5. Set the backlight level to a mid value before capturing so the slider is
-   visibly mid-travel rather than at either stop, then write the original
-   level back. **Two device writes, counted, restored** — no reads, no
-   polling.
+### Preconditions, all of which failed at least once
 
-**Constraint**: the capture must show a real paired device. A preview of the
-"no keyboard found" empty state would be accurate and useless.
+- **The session must be unlocked.** A locked Omarchy session draws the lock
+  surface above everything, so the bar renders nothing and the capture is a
+  picture of the password box. This is not obvious from `hyprctl`: the bar
+  layer is still present, still mapped, still `1920x26` at `0,0`.
+- **The display must be awake.** `grim` blocks indefinitely rather than
+  failing when the monitor is in DPMS off, because no frame is ever
+  produced. Check `hyprctl -j monitors | jq .[].dpmsStatus` first, and run
+  `grim` under `timeout` regardless.
+- **No special workspace may be showing.** The scratchpad overlay draws over
+  the bar. Hide it for the capture and toggle it back afterwards.
+- **The visible workspace should be empty.** This matters more than it
+  looks: the resulting file is committed to a public repository and
+  published to a marketplace, so anything on screen is published with it.
+  Assert the window count on the visible workspace is zero, crop tightly,
+  and never ship a full-desktop frame.
+
+### Deriving the crop
+
+The panel is drawn *inside* a fullscreen layer surface. `omarchy-bar` has a
+real rectangle (`0,0 1920x26`), but `omarchy-keyboard-panel` reports
+`0,0 1920x1080` — the whole monitor — so the union of the two layer
+rectangles is the entire screen and is useless as a crop. Hardcoding the
+panel's pixel offsets instead would be wrong on any other monitor.
+
+Difference two frames instead:
+
+1. Close the panel, capture frame A.
+2. Open it, wait for `layer_on_screen`, capture frame B.
+3. `magick A B -compose difference -composite -colorspace Gray -threshold 8%`
+   and read the trim bounding box (`-format '%@'`). Whatever changed is the
+   panel, in real pixels, derived rather than assumed.
+4. Union that box with the bar strip above it, pad evenly, clamp to the
+   monitor, and crop frame B.
+
+Capture at `grim -s 2` so the panel's caption text survives the
+marketplace's downscale to a card.
+
+### Driving Hyprland on 0.56.2
+
+`hyprctl dispatch` now routes through Lua, and the documented shell form
+fails:
+
+```
+$ hyprctl dispatch togglespecialworkspace scratchpad
+error: [string "return hl.dispatch(togglespecialworkspace scr..."]:1:
+')' expected near 'scratchpad'
+```
+
+It exits **7**, which under `set -e` aborts the script at the first toggle.
+The working form names the dispatcher as a function:
+
+```bash
+hyprctl dispatch 'hl.dsp.workspace.toggle_special("scratchpad")'
+hyprctl dispatch 'hl.dsp.dpms("on")'
+```
+
+Dispatcher names are discoverable at runtime — `hyprctl eval` returns only
+`ok`, so use `hyprctl repl`, which prints the value:
+
+```bash
+hyprctl repl 'local t={} for k,v in pairs(hl.dsp.workspace) do t[#t+1]=k end
+              table.sort(t) return table.concat(t,", ")'
+# change_id, move, rename, swap_monitors, toggle_special
+```
+
+Note that `hl.dsp.dpms` is a function where `hl.dsp.workspace` is a table,
+so iterating it raises `table expected, got function`.
+
+### The device, and proving the restore
+
+Set the level to mid-travel before capturing so the slider is not at either
+stop, and write the original back afterwards: **two writes, counted, no
+reads**, per AGENTS.md.
+
+One restore silently did not take. The widget reported the pre-restore level
+afterwards, and nothing errored. Per CONTRIBUTING.md the widget's own status
+is optimistic and is not evidence, so the restore is confirmed with one
+deliberate `mx-device state` read against the live device — the only device
+read in the whole procedure.
 
 ## Scope
 
