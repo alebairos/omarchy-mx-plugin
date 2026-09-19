@@ -85,7 +85,7 @@ root on Omarchy 4.0.0.r2095.
 |---|---|
 | Public, with install **and** removal instructions | `gh repo view` reports `visibility: PUBLIC`; README.md has `## Install` and `### Removing` |
 | License and external dependencies documented | `LICENSE` (MIT), `## License` in README, `## Requirements` names Solaar as the only one |
-| Own the plugin and its preview assets | Repository is the author's; the preview is a capture of this plugin running on the author's own machine. **Check at capture time** that the desktop background in frame is one the author may publish — an Omarchy-shipped background is safe, a third-party wallpaper may not be |
+| Own the plugin and its preview assets | Repository is the author's; the preview is a capture of this plugin running on the author's own machine. The background in frame is Omarchy's own Tokyo Night wallpaper, byte-identical to `/usr/share/omarchy/themes/tokyo-night/backgrounds/0-winding-road.webp`. An earlier capture on a `wallhaven-*` theme was discarded for this reason |
 | Does not overwrite user configuration | The plugin writes no config. `solaar-rule.yaml` is an optional manual append by the user |
 | Approval is listing, not a security review | Acknowledged; the marketplace states it plainly and so does this repository's own README about reviewing plugin source |
 

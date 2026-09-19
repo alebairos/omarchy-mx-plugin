@@ -257,6 +257,12 @@ the [original feature spec](specs/001-mx-quick-control/), and the
 
 ## More
 
+[`preview.png`](preview.png) is the listing image for
+[plugins.omarchy.org](https://plugins.omarchy.org), captured from this
+widget running on a real keyboard. How it is produced, and why it is
+produced that way, is in
+[`specs/005-marketplace-listing/`](specs/005-marketplace-listing/).
+
 Notes from building this, and from running Omarchy generally, are at
 [omarchy.alebairos.xyz](https://omarchy.alebairos.xyz/) — including the
 write-ups of the bugs behind several of the odder-looking decisions in this

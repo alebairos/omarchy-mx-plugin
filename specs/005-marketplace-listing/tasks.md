@@ -49,36 +49,27 @@ retained ID before any of them becomes permanent. ✅
       on the visible workspace
 - [x] T007 [US1] Refuse to capture when the visible workspace is not empty.
       This image is published; whatever is on screen is published with it
-- [ ] **T008 [US1] Run the capture and commit `preview.png` — BLOCKED**
+- [x] T008 [US1] Run the capture and commit `preview.png`
 
-  The session is locked (`omarchy-hyprland-session-locked` exits 0), and a
-  locked session draws its lock surface above everything, so the bar renders
-  nothing and the capture is a picture of the password box. Nothing in
-  `hyprctl` says so: the bar layer is still present, still mapped, still
-  `1920x26` at `0,0`.
+  Captured on the third attempt, after two script fixes found by running it:
+  `--in N` (the terminal you type into is itself a window on the visible
+  workspace) and differencing below the bar (the clock ticking at the far
+  left stretched the first crop to 1889px). Taken on the built-in Tokyo
+  Night theme, whose background is byte-identical to the Omarchy-shipped
+  asset — which is what makes the "I own the preview assets" checklist box
+  true.
 
-  This needs an unlocked session and cannot be worked around. Unlock, then:
-
-  ```bash
-  bash specs/005-marketplace-listing/capture-preview.sh
-  ```
-
-  The script now refuses up front with the reason rather than producing a
-  useless file, which is the behaviour proved by running it as it stands.
-
-- [ ] T009 [US1] Confirm the captured file is within the 50 MB and 40
-      megapixel input limits and reads at card size
-- [ ] T010 [US1] Confirm `omarchy plugin validate .` still exits 0 with the
+- [x] T009 [US1] Confirm the captured file is within the 50 MB and 40
+      megapixel input limits and reads at card size — 669x589, 0.39 MP, 92 KB
+- [x] T010 [US1] Confirm `omarchy plugin validate .` still exits 0 with the
       new root file present (SC-001)
 
 ---
 
 ## Phase C: Make the asset legible to a reader (P2)
 
-- [ ] T011 [US2] Add a line to README.md identifying `preview.png` as the
-      marketplace listing image and pointing at this spec. Deferred with
-      T008: a README pointing at a file that is not there is worse than no
-      pointer
+- [x] T011 [US2] Add a line to README.md identifying `preview.png` as the
+      marketplace listing image and pointing at this spec
 
 ---
 
@@ -93,9 +84,10 @@ fully; send it as a deliberate separate act.
       `review-required` label: the Solaar dependency, where the privilege
       capability comes from, and that the Solaar rule is a manual user step
 - [x] T014 [US2] Verify each of the five checklist boxes against the
-      repository rather than ticking it (SC-005). One carries a condition:
-      the "own the preview assets" box depends on the desktop background
-      that ends up in frame, so it is checked at capture time
+      repository rather than ticking it (SC-005). The "own the preview
+      assets" box was conditional on the background in frame; **resolved** —
+      the capture was taken on built-in Tokyo Night, and its background is
+      byte-identical to `/usr/share/omarchy/themes/tokyo-night/backgrounds/0-winding-road.webp`
 - [ ] T015 Submit the issue to `omacom/omarchy-plugin-marketplace` — **human
       decision, after `preview.png` lands and this branch merges**
 
