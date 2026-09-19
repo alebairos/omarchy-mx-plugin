@@ -277,6 +277,30 @@ condition and refuses, and a person switches to an empty workspace before
 running it. That is one action by someone who can see the screen, against
 an unbounded set of ways to get it wrong on their behalf.
 
+### The terminal you run it from is one of the windows
+
+Requiring an empty visible workspace and requiring a person to type the
+command are in direct conflict: the terminal is itself a window on that
+workspace, and so is whatever agent session is driving it. The first
+version of the script was therefore unrunnable by hand, which is exactly
+how it failed the first time someone tried it.
+
+`--in N` resolves it. The script does its preflight, counts down N seconds
+while you switch to an empty workspace, and only then checks the window
+count and captures:
+
+```bash
+bash specs/005-marketplace-listing/capture-preview.sh --in 10
+```
+
+The refusal also now lists the offending windows by class and title, so the
+reason is visible rather than inferred.
+
+Refusing must also cost the device nothing. The first version restored the
+backlight level from its exit trap unconditionally, so a run that bailed
+out before touching the keyboard still issued a write on the way out. The
+restore is now guarded by whether the mid-level write actually happened.
+
 ### The device, and proving the restore
 
 Set the level to mid-travel before capturing so the slider is not at either
