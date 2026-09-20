@@ -8,7 +8,7 @@ ever needs re-reading.
 
 Only one of the JSON fixtures is *captured* from the reference hardware:
 `mx-device-keyboard-and-mouse.json`. The rest are **constructed** against the
-contract in `specs/004-single-transport/spec.md`, because the states they
+single-transport contract, because the states they
 describe cannot be produced on demand here — a missing receiver means
 unplugging one, and a degraded frame is by definition intermittent. They are
 written from observed failures rather than imagined ones (see the spec's

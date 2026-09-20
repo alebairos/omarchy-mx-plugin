@@ -92,14 +92,17 @@ jobs:
           # the code before enabling it, so generic tooling that carries no
           # information about this project must not creep back in.
           fail=0
-          for path in .specify .claude node_modules; do
+          # `specs` is here deliberately: the reasoning moved to the private
+          # omarchy-mx-plugin-host repository so that what ships to a user is
+          # the plugin and its tests. Re-adding it here would undo that.
+          for path in .specify .claude node_modules specs; do
             if [ -e "$path" ]; then
               echo "::error::$path is committed but ships to every user; keep it out (see .gitignore)"
               fail=1
             fi
           done
           # The docs a contributor or agent is pointed at must actually exist.
-          for doc in README.md CONTRIBUTING.md AGENTS.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md specs/constitution.md; do
+          for doc in README.md CONTRIBUTING.md AGENTS.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md; do
             test -f "$doc" || { echo "::error::missing $doc"; fail=1; }
           done
           exit $fail
