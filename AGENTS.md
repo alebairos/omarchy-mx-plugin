@@ -18,12 +18,18 @@ it deliberately does not do, and the two device behaviours that look like
 bugs and are not. Then [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing
 anything: it carries the hardware rules that matter.
 
-[`CONSTITUTION.md`](CONSTITUTION.md) is the short list of things this
-project will not do — device access only through Solaar's own code, no raw
-HID++, no `/dev/hidraw`, no new daemon or systemd unit, no speculative
-features. Check a change against it before
-proposing one; several obvious-looking improvements are ruled out there on
-purpose.
+[`CONSTITUTION.md`](CONSTITUTION.md) is five principles, and it governs
+what you may propose. Three are hard limits: device access only through
+Solaar's own code, never raw HID++ and never `/dev/hidraw`; no new daemon,
+systemd unit or background service; no build step or packaging format of
+its own. Two are obligations rather than limits: behave like a built-in
+Omarchy plugin, and degrade gracefully — never crash the shell or spam
+errors when Solaar is missing or no device is paired.
+
+Features like macros, per-key RGB or gesture config are **deferred, not
+banned**. The rule is that they wait for a real, validated need, so the way
+to propose one is with evidence that the need exists, not to assume the
+answer is no. Amendments have their own procedure, in the file.
 
 ## Install it
 

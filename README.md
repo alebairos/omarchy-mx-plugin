@@ -257,10 +257,12 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to test a change against
 real hardware, and [`AGENTS.md`](AGENTS.md) if you are working with an AI
 agent on this repository.
 
-[`CONSTITUTION.md`](CONSTITUTION.md) is what this plugin will not do: every
-device call goes through Solaar's own code, never raw HID++ and never
-`/dev/hidraw`; no new daemon or systemd unit; and no features beyond the
-ones already validated by hand. It is worth reading before you enable any
+[`CONSTITUTION.md`](CONSTITUTION.md) is what this plugin promises and what
+it refuses. Every device call goes through Solaar's own code, never raw
+HID++ and never `/dev/hidraw`. It adds no daemon, systemd unit or
+background service. It stays within the use cases already validated by
+hand. And it must degrade gracefully rather than crash your shell or fill
+your log when Solaar is absent or no device is paired. It is worth reading before you enable any
 plugin that runs unsandboxed, and before proposing a change to this one.
 
 The specs behind individual features are kept in a separate internal
