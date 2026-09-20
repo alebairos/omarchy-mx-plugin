@@ -17,6 +17,12 @@ it deliberately does not do, and the two device behaviours that look like
 bugs and are not. Then [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing
 anything: it carries the hardware rules that matter.
 
+[`CONSTITUTION.md`](CONSTITUTION.md) is the short list of things this
+project will not do — no raw HID++, no `/dev/hidraw`, no new daemon or
+systemd unit, no speculative features. Check a change against it before
+proposing one; several obvious-looking improvements are ruled out there on
+purpose.
+
 ## Install it
 
 ```bash

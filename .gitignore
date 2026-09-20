@@ -9,7 +9,7 @@
 # Spec-kit scaffolding. Generic, identical in every spec-kit project, and
 # regenerable with `specify init` — it carries no information about *this*
 # project. The one project-specific artefact it used to hold, the
-# constitution, lives in the omarchy-mx-plugin-host repository instead.
+# constitution, lives in CONSTITUTION.md instead.
 .specify/
 .claude/
 

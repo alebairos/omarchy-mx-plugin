@@ -162,7 +162,7 @@ only caught by mutation testing.
   `/dev/hidraw*`, no new daemon or systemd unit.
 - Scope stays deliberately narrow: this is a bar widget, not a second
   Solaar GUI. Settings it does not expose are reachable by middle-clicking
-  the bar icon, which opens Solaar.
+  the bar icon, which opens Solaar. See [`CONSTITUTION.md`](CONSTITUTION.md).
 
 ## Pull requests
 
