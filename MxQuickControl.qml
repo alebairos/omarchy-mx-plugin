@@ -10,8 +10,8 @@ import "Model.js" as Model
 // to open a panel (same click-to-open, stays-open pattern as Omarchy's
 // built-in Network/Bluetooth/Power panels) with a backlight on/off switch,
 // a brightness slider, and battery status for every paired device.
-// See specs/001-mx-quick-control/ in the source repo for the full spec,
-// plan, and the exact `solaar` command contract this file implements.
+// The full spec, plan, and the exact `solaar` command contract this file
+// implements are kept in the project's internal specs repository.
 Panel {
   id: root
   moduleName: "alebairos.mx-quick-control"
@@ -93,7 +93,7 @@ Panel {
   // Backlight effect (Static / Wave / Breathing / ...). Solaar's CLI has no
   // setting for this, so it goes through the bundled mx-backlight-effect
   // helper, which uses Solaar's own logitech_receiver library rather than
-  // touching /dev/hidraw. See specs/003-backlight-effects/spec.md.
+  // touching /dev/hidraw. See the backlight-effects spec, kept internally.
   property int effectIndex: -1
   property var effectsSupported: []
   // Every device call goes through this one bundled transport (feature 004).

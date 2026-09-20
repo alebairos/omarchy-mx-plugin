@@ -34,8 +34,8 @@ under 1.1.0, which was never tagged on its own.
   call and the widget's own state all kept working and only the OSD went
   missing. The native call is still tried first and the shell's ungated
   CLI (`omarchy-shell shell summon`) covers the refusal, so this
-  disappears by itself if the gate is ever widened. See
-  [`specs/research/osd-summon-gate.md`](specs/research/osd-summon-gate.md).
+  disappears by itself if the gate is ever widened. The investigation is
+  written up in the internal specs repository.
 
 - **The keyboard's brightness keys (F4/F5) raise the OSD as instantly as the
   effect key.** They had been left paying the 2.0–2.3s device read that the

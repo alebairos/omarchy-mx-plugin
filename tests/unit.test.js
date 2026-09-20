@@ -173,7 +173,7 @@ test("a keyboard that vanishes from one read is not believed immediately", () =>
 //
 // These cover the distinction 1.0.0 could not make. Every "degraded" case
 // below is one that actually shipped a bug, not one imagined for coverage:
-// see specs/004-single-transport/spec.md, "Consequence 1".
+// see the single-transport spec, "Consequence 1", in the internal repo.
 
 const json = (name) => fixture(name)
 

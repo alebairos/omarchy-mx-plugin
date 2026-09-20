@@ -1,11 +1,15 @@
 # MX Quick Control
 
+[![CI](https://github.com/alebairos/omarchy-mx-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/alebairos/omarchy-mx-plugin/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/alebairos/omarchy-mx-plugin)](https://github.com/alebairos/omarchy-mx-plugin/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 An [Omarchy](https://omarchy.org/) bar widget for Logitech MX peripherals:
 battery status at a glance, and your keyboard's backlight controlled from
 the bar instead of from [Solaar](https://pwr-Solaar.github.io/Solaar/)'s
 window.
 
-> **Status: 1.0.0.** Used daily on the author's machine. See
+> **Status: 1.2.0.** Used daily on the author's machine. See
 > [Supported devices](#supported-devices) for exactly what has been tested
 > versus what is expected to work — only two devices have ever been tried —
 > and [Known limitations](#known-limitations) for what it does not do.
@@ -227,9 +231,8 @@ truncated or contended answer is a parse failure rather than a plausible
 wrong value.
 
 Before 1.1 this went through the `solaar` CLI three different ways, which
-cost six invocations to open the panel. The rewrite and the reasoning behind
-it are in
-[`specs/004-single-transport/`](specs/004-single-transport/).
+cost six invocations to open the panel. The rewrite, and the measurements
+behind it, are recorded in the internal specs repository (see *Development*).
 
 Two device behaviours are worth knowing if you read the code, because they
 look like bugs and are not:
@@ -250,18 +253,17 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to test a change against
 real hardware, and [`AGENTS.md`](AGENTS.md) if you are working with an AI
 agent on this repository.
 
-Design decisions and their reasoning live in
-[`specs/`](specs/): the [constitution](specs/constitution.md),
-the [original feature spec](specs/001-mx-quick-control/), and the
-[release-candidate plan](specs/002-public-release-rc/).
+Design decisions and the reasoning behind them are kept in a separate
+internal repository, `omarchy-mx-plugin-host`, rather than here. Installing
+this plugin clones this repository onto your machine in full, so it holds
+the plugin, its tests, and the docs you are reading, and nothing else.
 
 ## More
 
 [`preview.png`](preview.png) is the listing image for
 [plugins.omarchy.org](https://plugins.omarchy.org), captured from this
-widget running on a real keyboard. How it is produced, and why it is
-produced that way, is in
-[`specs/005-marketplace-listing/`](specs/005-marketplace-listing/).
+widget running on a real keyboard. The procedure that produces it is kept
+with the specs, in the internal repository.
 
 Notes from building this, and from running Omarchy generally, are at
 [omarchy.alebairos.xyz](https://omarchy.alebairos.xyz/) — including the

@@ -1,153 +1,71 @@
-# Guidance for agents (and the humans reviewing them)
+# Guidance for agents
 
-This file is for AI coding agents working in this repository, and for the
-person supervising one. It is deliberately short and specific: it records
-the things that have already gone wrong here, so they do not go wrong the
-same way twice.
+## What this is
 
-Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first — everything there applies.
-This adds only what is peculiar to working on this code without hands on
-the hardware.
+An [Omarchy](https://omarchy.org/) **bar widget**: battery status and
+backlight control for Logitech MX peripherals, driven through the
+[Solaar](https://pwr-Solaar.github.io/Solaar/) CLI. Plugin id
+`alebairos.mx-quick-control`, declared in `manifest.json`.
 
-## Orientation, in order
+Four files are the product. `MxQuickControl.qml` is the widget and its
+panel, `Model.js` is the parsing and state logic shared with the tests,
+`mx-device` is the one Python transport that talks to the device, and
+`solaar-rule.yaml` is an optional Solaar rule users install by hand.
 
-1. [`specs/constitution.md`](specs/constitution.md) — the non-negotiables.
-   Shell out to `solaar`, stay a bar widget, no new daemons.
-2. [`Model.js`](Model.js) — the parser and state logic, and the only place
-   where device behaviour is written down as executable rules.
-3. [`specs/001-mx-quick-control/`](specs/001-mx-quick-control/) — what the
-   plugin is and the `solaar` command contract it depends on.
-4. [`specs/002-public-release-rc/`](specs/002-public-release-rc/) — the
-   remaining work, with each task's justification.
+Read [`README.md`](README.md) first — what it does, what it requires, what
+it deliberately does not do, and the two device behaviours that look like
+bugs and are not. Then [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing
+anything: it carries the hardware rules that matter.
 
-## The hardware is the source of truth, not the tool that reads it
-
-`solaar` reports a *saved* value and a *live* value, and they disagree
-precisely when something is broken. The widget's own `status` output is
-optimistic by design and will happily report a lit keyboard that is dark.
+## Install it
 
 ```bash
-solaar show | grep -E "^ +Backlight Level +:"    # live — the real answer
+omarchy plugin add https://github.com/alebairos/omarchy-mx-plugin.git --enable
 ```
 
-Never conclude a change works from the widget's own state. This is the
-single most expensive mistake made in this project.
+Requires Solaar and a paired MX device. Removal, placement and settings are
+in [`README.md`](README.md).
 
-## Verify by driving, not by asking a person to click
-
-The widget exposes its controls over IPC. Use them; do not run a
-click-and-report loop with a human as the test harness.
+## Test it
 
 ```bash
-Q="qs -p /usr/share/omarchy/shell ipc call alebairos.mx-quick-control"
-$Q status; $Q backlight; $Q level 5
+npm test                 # node only, no device, no setup
+npm run test:shell       # real widget in a throwaway quickshell
+npm run test:acceptance  # live session and real hardware
 ```
 
-Reserve human verification for what genuinely needs eyes: whether a glyph
-renders, whether an interaction *feels* right, whether the panel looks
-native beside the built-ins. Those are real and cannot be automated here.
+`npm test` is what CI runs and what you should run. The other two skip
+themselves, saying why, wherever they cannot run.
 
-## Things that have silently wasted time here
+## Three rules that are not negotiable
 
-- **`omarchy-shell shell rescanPlugins` does not reload a changed root
-  type.** It logs "reloading" and keeps the old code. Use `omarchy restart
-  shell` for anything structural, and confirm the process actually
-  restarted (`ps -o pid,lstart -e | grep quickshell`).
-- **QML cannot observe mutations to plain JavaScript objects**, and a
-  binding that returns the same object reference emits no change signal.
-  Keyboard state therefore lives in real observable properties. Do not
-  "tidy" it back into a computed object.
-- **`Process.running = true` is a no-op while that process is already
-  running**, and inside its own `onExited` it still reads as running.
-  Queued work is drained via `Qt.callLater` for that reason.
-- **Astral-plane Nerd Font codepoints get mangled by naive text edits.**
-  After editing a glyph, verify the codepoint rather than the rendering:
-  `python3 -c "..."` printing `hex(ord(c))`. Check the font actually has it
-  with `fc-list ':charset=F030C' family`.
-- **`.pragma library` breaks node's parser.** `Model.js` is loaded by both
-  QML and the test runner, so it must stay plain JavaScript.
+1. **The hardware is the source of truth, not the widget.** Its `status`
+   output is optimistic by design and will report a lit keyboard that is
+   dark. Confirm against the device:
+   `solaar show | grep -E "^ +Backlight Level +:"`. This is the most
+   expensive mistake available here.
 
-## Polling the device during diagnosis is not read-only
+2. **Polling the device during diagnosis is not read-only.** Repeated
+   `solaar show` or `mx-device state` calls make Solaar lose the keyboard's
+   feature table, after which no rule fires, silently, with a clean journal.
+   Prefer instruments that cost the device nothing. After any burst of
+   polling, restart Solaar before concluding anything:
+   `systemctl --user restart app-solaar@autostart.service`.
 
-The receiver is one contended resource, and Solaar is reading it too. On
-2026-09-10 an hour went into a "the Solaar rules stopped firing" hunt in
-which the rules, the byte offsets, the `Execute` command and the IPC endpoint
-were each proven correct in turn. The actual cause was the diagnosis itself:
-repeated `mx-device state` and `solaar show` calls, fired while Solaar was
-enumerating the keyboard, made its feature-set read fail. With no feature
-table, `Feature: BACKLIGHT2` can never resolve, so no rule fires -- not the
-fast ones, not the catch-all -- silently, with a clean journal. Solaar does
-not retry or recover on its own.
+3. **Do not trust a green suite.** Before claiming a test protects
+   something, break the code and watch it fail. A test here once passed
+   with the parser deliberately broken, for the wrong reason, and would
+   have slept through a real regression.
 
-- **Prefer instruments that never touch the device.** The widget's IPC
-  `status`, the OSD's `state`, and a second reader on `/dev/hidraw2` (hidraw
-  queues per open descriptor, so it observes without stealing) all cost the
-  device nothing. Reach the hardware only for a deliberate, single read.
-- **After any burst of device polling, restart Solaar before concluding
-  anything about the rules:** `systemctl --user restart
-  app-solaar@autostart.service` (that is the unit name; there is no
-  `solaar.service`). Then confirm `solaar show` lists `BACKLIGHT2`.
-- **To test whether the rules would fire, do not press keys -- evaluate.**
-  Load the rules file through `logitech_receiver.diversion` and run each
-  leaf rule's conditions against a captured frame via `make_notification`.
-  It answers in milliseconds, needs no human, and separates "the rule is
-  wrong" from "Solaar is not evaluating" cleanly. Note `D.rules.components`
-  is nested one level -- `[<the file's rules>, <built-ins>]` -- so a flat
-  iteration reports two rules and looks alarming for no reason.
+## Where the reasoning lives
 
-## Two more tiers, in Omarchy's own shape
+Specs, planning and research are in a separate private repository,
+`omarchy-mx-plugin-host`. Installing this plugin clones this repository in
+full onto a user's machine, so this one holds the plugin, its tests, and
+the documentation a user or contributor reads. Nothing else.
 
-`npm test` is node-only. `npm run test:shell` (tests/shell.d) launches the
-real widget in a throwaway quickshell under a fake bar and the fake
-transport and drives it with QtTest's TestEvent -- clicks, a reported state,
-Escape -- then asserts from the fake's log what the UI sent. It also runs
-the offline rules-engine check above as a test, and fails on any TypeError
-the widget logs while loading. `npm run test:acceptance` (tests/acceptance.d)
-runs inside a live session and touches the device exactly three times.
-Every file skips, saying why, where it cannot run. Break the code before
-trusting either: all of them were confirmed to fail against mutations when
-written, and CONTRIBUTING.md describes what each one proves.
-
-## Do not trust a green test suite
-
-Before claiming a test protects something, break the code and watch it
-fail. A test here asserting "reads the live level, never the saved one"
-passed with the parser deliberately broken, because the live line follows
-the saved one and overwrote it — right answer, wrong reason, and it would
-have slept through a real regression.
-
-When adding a test for a fix, mutate the fix and confirm the new test
-fails. Say in the commit message that you did.
-
-## Calibrating things only a human can see
-
-Some facts are only obtainable by someone looking at the hardware: what the
-LEDs are doing, whether an interaction feels right, whether a glyph renders.
-There is a method for that, learned by doing it badly first — see
-[`specs/research/hitl-calibration.md`](specs/research/hitl-calibration.md).
-
-The short version: make it drivable from one command before asking anyone to
-look, change one thing per trial, leave the state applied so the answer can
-arrive whenever they are next at the keyboard rather than inside a timed
-window, label honestly until confirmed, and write each answer straight into
-the code with the observation as the comment.
-
-## Merging
-
-Rebase-merge only, through a pull request; `main` rejects direct pushes from
-everyone including the maintainer. Your commits land individually and keep
-their messages, so write each one to stand alone -- in this repository the
-commit message is where device behaviour is recorded, and it is the part
-nobody can reconstruct later.
-
-Original pre-rebase commits stay available at `refs/pull/N/head` if a change
-ever needs auditing:
-`git fetch origin 'refs/pull/*/head:refs/remotes/pr/*'`
-
-## Reporting
-
-Report what was verified and how, and state plainly what was not. "Tests
-pass and it loads without QML errors" is not the same claim as "the
-backlight physically turns on", and only one of them can be made from a
-terminal. If something is unverified — a device you do not have, a bar
-orientation you cannot see — say so rather than implying coverage.
+Commit messages here are load-bearing. They record why a write is sent
+twice, why "off" is a level rather than a mode, why a redundant-looking
+step exists. Squash merging is disabled so each survives on its own. If you
+learn something about the device or Solaar, put it in the commit message
+**and** in a code comment.
