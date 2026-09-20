@@ -6,12 +6,13 @@ import qs.Ui
 import "Model.js" as Model
 
 // MX Quick Control - battery status + backlight control for Logitech MX
-// peripherals, driven entirely through the `solaar` CLI. Click the bar icon
-// to open a panel (same click-to-open, stays-open pattern as Omarchy's
-// built-in Network/Bluetooth/Power panels) with a backlight on/off switch,
+// peripherals, driven through Solaar's own `logitech_receiver` library via
+// the bundled mx-device transport. Click the bar icon to open a panel (same
+// click-to-open, stays-open pattern as Omarchy's built-in
+// Network/Bluetooth/Power panels) with a backlight on/off switch,
 // a brightness slider, and battery status for every paired device.
-// The full spec, plan, and the exact `solaar` command contract this file
-// implements are kept in the project's internal specs repository.
+// The full spec, plan, and the transport contract this file implements are
+// kept in the project's internal specs repository.
 Panel {
   id: root
   moduleName: "alebairos.mx-quick-control"
@@ -29,7 +30,7 @@ Panel {
 
   // Per-device learned max backlight level (deviceIndex -> int), populated
   // lazily the first time a level-set is rejected as out of bounds. See
-  // contracts/solaar-cli.md, "levelMax detection".
+  // the transport contract in the internal specs repo, "levelMax detection".
   property var levelMaxByDevice: ({})
 
   // Per-instance settings, read from this widget's entry in

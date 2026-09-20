@@ -3,8 +3,9 @@
 ## What this is
 
 An [Omarchy](https://omarchy.org/) **bar widget**: battery status and
-backlight control for Logitech MX peripherals, driven through the
-[Solaar](https://pwr-Solaar.github.io/Solaar/) CLI. Plugin id
+backlight control for Logitech MX peripherals, driven through
+[Solaar](https://pwr-Solaar.github.io/Solaar/)'s own `logitech_receiver`
+library rather than raw HID++. Plugin id
 `alebairos.mx-quick-control`, declared in `manifest.json`.
 
 Four files are the product. `MxQuickControl.qml` is the widget and its
@@ -18,8 +19,9 @@ bugs and are not. Then [`CONTRIBUTING.md`](CONTRIBUTING.md) before changing
 anything: it carries the hardware rules that matter.
 
 [`CONSTITUTION.md`](CONSTITUTION.md) is the short list of things this
-project will not do — no raw HID++, no `/dev/hidraw`, no new daemon or
-systemd unit, no speculative features. Check a change against it before
+project will not do — device access only through Solaar's own code, no raw
+HID++, no `/dev/hidraw`, no new daemon or systemd unit, no speculative
+features. Check a change against it before
 proposing one; several obvious-looking improvements are ruled out there on
 purpose.
 

@@ -158,8 +158,9 @@ only caught by mutation testing.
 - **Nerd Font glyphs, never emoji**, and bind `color` to the theme. CI
   enforces the first half. Verify a codepoint exists before using it:
   `fc-list ':charset=F030C' family`.
-- All device access goes through the `solaar` CLI. No direct HID++, no
-  `/dev/hidraw*`, no new daemon or systemd unit.
+- All device access goes through Solaar's own code — the bundled
+  `mx-device` transport uses its `logitech_receiver` library. No direct
+  HID++, no `/dev/hidraw*`, no new daemon or systemd unit.
 - Scope stays deliberately narrow: this is a bar widget, not a second
   Solaar GUI. Settings it does not expose are reachable by middle-clicking
   the bar icon, which opens Solaar. See [`CONSTITUTION.md`](CONSTITUTION.md).
