@@ -135,10 +135,9 @@ reporting a battery gets a battery readout. No model allow-list.
 hardware. Reports welcome:
 
 - Other backlit Logitech keyboards (MX Mechanical full-size, MX Keys, …).
-  Backlight control should work; the brightness slider assumes a maximum
-  level of **7** until the device rejects a higher value and the real
-  maximum is learned, so a device with a different range may briefly show a
-  wrong maximum.
+  Backlight control should work; the brightness maximum is read from the
+  device rather than assumed, so a keyboard with a different number of
+  levels should show the right range.
 - **Bluetooth-paired** Logitech devices. `solaar show` output has only been
   parsed against Bolt-receiver output; a Bluetooth device may format its
   block differently.
@@ -246,16 +245,21 @@ look like bugs and are not:
 ## Development
 
 ```bash
-npm test        # 25 unit + functional tests, no dependencies to install
+npm test                 # 61 unit + functional tests, nothing to install
+npm run test:shell       # the real widget in a throwaway quickshell
+npm run test:acceptance  # a live session and the real keyboard
 ```
+
+`npm test` is what CI runs. The other two skip themselves, saying why,
+wherever they cannot run.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to test a change against
 real hardware, and [`AGENTS.md`](AGENTS.md) if you are working with an AI
 agent on this repository.
 
-[`CONSTITUTION.md`](CONSTITUTION.md) is what this plugin will not do: all
-device access through the `solaar` CLI, no raw HID++ parsing, no
-`/dev/hidraw`, no new daemon or systemd unit, and no features beyond the
+[`CONSTITUTION.md`](CONSTITUTION.md) is what this plugin will not do: every
+device call goes through Solaar's own code, never raw HID++ and never
+`/dev/hidraw`; no new daemon or systemd unit; and no features beyond the
 ones already validated by hand. It is worth reading before you enable any
 plugin that runs unsandboxed, and before proposing a change to this one.
 
