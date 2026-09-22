@@ -11,7 +11,20 @@ merged to only from a branch whose CI is green.
 
 ## [Unreleased]
 
-Nothing yet.
+### Removed
+
+- **`AGENTS.md` no longer ships with the plugin.** `omarchy plugin add`
+  installs this tree to `~/.config/omarchy/plugins/`, so the file landed on
+  every user's machine, where a coding agent run anywhere near that
+  directory auto-loads it and reads it as instructions — instructions that
+  said to install the plugin, run its test suites, poll the keyboard and
+  restart a systemd service. That is an agent-triggered code and device
+  execution path outside the plugin's normal user flow, and a marketplace
+  reviewer blocked the listing over it. Agent guidance now lives in the
+  project's private repository. CI fails if any agent control file
+  reappears here. Nothing a user or contributor needs was lost: the one
+  piece of knowledge that existed only there, why polling the device during
+  diagnosis is not read-only, is now in `CONTRIBUTING.md`.
 
 ## [1.2.0] — 2026-09-10
 

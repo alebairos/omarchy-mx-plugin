@@ -254,8 +254,7 @@ npm run test:acceptance  # a live session and the real keyboard
 wherever they cannot run.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for how to test a change against
-real hardware, and [`AGENTS.md`](AGENTS.md) if you are working with an AI
-agent on this repository.
+real hardware.
 
 [`CONSTITUTION.md`](CONSTITUTION.md) governs what this plugin may become.
 It holds the scope to what has been validated by hand, requires the widget

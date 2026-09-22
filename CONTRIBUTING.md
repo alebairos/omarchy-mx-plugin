@@ -137,8 +137,17 @@ machine:
   device read, then makes one brightness write and **one** read to compare
   against device truth. Every step leaves a screenshot in
   `$OMARCHY_ACCEPTANCE_DIR`. This is the only tier that touches the
-  keyboard, and it counts every contact — see `AGENTS.md` on why polling
-  the device is not read-only.
+  keyboard, and it counts every contact.
+
+  **Polling the device during diagnosis is not read-only.** The receiver is
+  one contended resource and Solaar is reading it too. Repeated `solaar
+  show` or `mx-device state` calls, fired while Solaar is enumerating the
+  keyboard, can make its feature-set read fail. With no feature table,
+  `Feature: BACKLIGHT2` never resolves and no Solaar rule fires — silently,
+  with a clean journal, and it does not recover on its own. Prefer
+  instruments that cost the device nothing, and after any burst of polling
+  restart Solaar before concluding anything about the rules:
+  `systemctl --user restart app-solaar@autostart.service`.
 
 Neither of those is a pixel comparison. Omarchy has none either: its visual
 convention is geometry assertions on real components, OCR for text, and
