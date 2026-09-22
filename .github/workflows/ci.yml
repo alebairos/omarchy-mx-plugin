@@ -101,8 +101,23 @@ jobs:
               fail=1
             fi
           done
+          # Agent control files are auto-loaded as instructions by coding
+          # agents. `omarchy plugin add` installs this tree to
+          # ~/.config/omarchy/plugins/, so one here is an instruction file
+          # on every user's machine, telling an agent that never asked to
+          # install the plugin, run its suites, poll the keyboard and
+          # restart a service. A marketplace reviewer blocked the listing
+          # over exactly this on 2026-09-20. Agent guidance lives in the
+          # private omarchy-mx-plugin-host repository instead.
+          for path in AGENTS.md CLAUDE.md GEMINI.md .cursorrules .clinerules \
+                      .windsurfrules .aider.conf.yml .github/copilot-instructions.md; do
+            if [ -e "$path" ]; then
+              echo "::error::$path is an agent control file and ships to every user; keep it in the host repo"
+              fail=1
+            fi
+          done
           # The docs a contributor or agent is pointed at must actually exist.
-          for doc in README.md CONTRIBUTING.md AGENTS.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md CONSTITUTION.md; do
+          for doc in README.md CONTRIBUTING.md CHANGELOG.md SECURITY.md CODE_OF_CONDUCT.md CONSTITUTION.md; do
             test -f "$doc" || { echo "::error::missing $doc"; fail=1; }
           done
           exit $fail
